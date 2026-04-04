@@ -96,7 +96,9 @@ export default function markdownlintOnMdExtension(pi: ExtensionAPI): void {
 
     const runner = await detectRunner(ctx.signal);
     const args =
-      runner === "bunx" ? ["markdownlint-cli", ...files] : ["--yes", "markdownlint-cli", ...files];
+      runner === "bunx"
+        ? ["markdownlint-cli", "--fix", ...files]
+        : ["--yes", "markdownlint-cli", "--fix", ...files];
 
     const result = await pi.exec(runner, args, { signal: ctx.signal });
     checkInFlight = false;
@@ -119,8 +121,8 @@ export default function markdownlintOnMdExtension(pi: ExtensionAPI): void {
 
     const rerunCmd = `${runner} ${args.join(" ")}`;
     const message = [
-      `Automated markdownlint check failed (exit code ${result.code}).`,
-      `Fix Markdown issues and verify with \`${rerunCmd}\` before continuing.`,
+      `Automated markdownlint check with --fix still failed (exit code ${result.code}).`,
+      `Address remaining Markdown issues and verify with \`${rerunCmd}\` before continuing.`,
       output ? `\n\nRecent output:\n\n\`\`\`text\n${fenceSafe(output)}\n\`\`\`` : "",
     ].join(" ");
 
