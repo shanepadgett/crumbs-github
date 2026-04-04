@@ -16,6 +16,8 @@ Review marked bash approvals from `.pi/permission-review.ndjson`.
 - Flag risky/ambiguous commands for explicit user decision.
 - Propose concrete edits to `.pi/crumbs.json` and/or `@shared/permission-gate/safe-commands.ts` as needed, but do not apply edits without user confirmation.
 - If the review file is missing or empty, report that clearly.
+- Do **not** clear `.pi/permission-review.ndjson` immediately after presenting the review.
+- Clear `.pi/permission-review.ndjson` only after the user explicitly confirms what to do with the suggestions (e.g., apply additions/denials), so entries are not lost before a decision.
 - Present the review to the user as a simple markdown table with columns: `Command / Pattern`, `Safety level`, and `Justification`.
 - Use exactly these safety levels:
   - `built-in` = good candidate for built-in safe handling in `@shared/permission-gate/safe-commands.ts`

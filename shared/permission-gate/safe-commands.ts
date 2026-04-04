@@ -41,6 +41,7 @@ const GIT_SAFE_READ_ONLY_SUBCOMMANDS = new Set([
   "ls-files",
   "show-ref",
   "grep",
+  "log",
 ]);
 
 const GIT_DIFF_UNSAFE_OPTIONS = new Set(["--ext-diff", "--textconv", "--output"]);

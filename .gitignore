@@ -14,3 +14,6 @@ coverage/
 
 # OS/editor
 .DS_Store
+
+# Local permission review log
+.pi/permission-review.ndjson
