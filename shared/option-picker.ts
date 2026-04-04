@@ -1,9 +1,10 @@
 /**
  * Shared Option Picker
  *
- * What it does: renders a TUI option picker with optional per-option notes.
+ * What it does: renders a TUI option picker with optional per-option notes
+ * and an optional review-mark toggle.
  * How to use it: call `showOptionPicker()` with a title and options, then read
- * `result.action` and `result.notes`.
+ * `result.action`, `result.notes`, and optionally `result.reviewMarked`.
  * Example:
  * ```ts
  * const result = await showOptionPicker(ctx, {
@@ -27,6 +28,12 @@ type OptionPickerTone = "accent" | "text" | "muted" | "dim";
 interface OptionNoteConfig {
   initialValue?: string;
   maxLength?: number;
+}
+
+interface OptionPickerReviewToggleConfig {
+  key?: string;
+  label?: string;
+  initialValue?: boolean;
 }
 
 interface OptionState<TAction extends string> {
@@ -57,11 +64,13 @@ export interface OptionPickerConfig<TAction extends string> {
   lines?: ReadonlyArray<OptionPickerLine>;
   options: ReadonlyArray<OptionPickerOption<TAction>>;
   cancelAction?: TAction;
+  reviewToggle?: OptionPickerReviewToggleConfig;
 }
 
 export interface OptionPickerResult<TAction extends string> {
   action: TAction;
   notes: Partial<Record<TAction, string>>;
+  reviewMarked?: boolean;
 }
 
 const NOTE_KEY = "n";
@@ -130,6 +139,10 @@ function isNoteToggleInput(data: string): boolean {
   return data.length === 1 && data.toLowerCase() === NOTE_KEY;
 }
 
+function isReviewToggleInput(data: string, enabled: boolean, key: string): boolean {
+  return enabled && key.length > 0 && data === key;
+}
+
 export async function showOptionPicker<TAction extends string>(
   ctx: ExtensionContext,
   config: OptionPickerConfig<TAction>,
@@ -145,9 +158,14 @@ export async function showOptionPicker<TAction extends string>(
       ? config.cancelAction
       : undefined;
 
+  const reviewToggleEnabled = config.reviewToggle !== undefined;
+  const reviewToggleKey = config.reviewToggle?.key ?? "r";
+  const reviewToggleLabel = config.reviewToggle?.label ?? "review";
+
   try {
     return await ctx.ui.custom<OptionPickerResult<TAction> | null>((tui, theme, _kb, done) => {
       let selectedIndex = 0;
+      let reviewMarked = config.reviewToggle?.initialValue ?? false;
 
       function currentOption(): OptionState<TAction> {
         return options[selectedIndex]!;
@@ -162,6 +180,7 @@ export async function showOptionPicker<TAction extends string>(
         done({
           action,
           notes: buildNotes(options),
+          reviewMarked: reviewToggleEnabled ? reviewMarked : undefined,
         });
       }
 
@@ -223,6 +242,12 @@ export async function showOptionPicker<TAction extends string>(
 
           const option = currentOption();
 
+          if (isReviewToggleInput(data, reviewToggleEnabled, reviewToggleKey)) {
+            reviewMarked = !reviewMarked;
+            tui.requestRender();
+            return;
+          }
+
           if (isNoteToggleInput(data) && option.noteEnabled && !option.noteOpen) {
             openNote(option);
             return;
@@ -280,16 +305,28 @@ export async function showOptionPicker<TAction extends string>(
             lines.push(truncateToWidth(theme.fg("muted", `  └ ${noteText}`), width));
           }
 
-          lines.push("");
-          lines.push(
-            truncateToWidth(
+          const footerParts: string[] = [
+            theme.fg("muted", "↑↓/Tab: navigate"),
+            theme.fg("muted", "Enter: select"),
+            theme.fg("muted", `${NOTE_KEY}: note`),
+          ];
+
+          if (reviewToggleEnabled) {
+            footerParts.push(
               theme.fg(
-                "dim",
-                `↑↓/Tab navigate • Enter select • ${NOTE_KEY} note • Ctrl+c clear/close • Esc cancel`,
+                reviewMarked ? "success" : "muted",
+                `${reviewToggleKey}: toggle ${reviewToggleLabel}`,
               ),
-              width,
-            ),
+            );
+          }
+
+          footerParts.push(
+            theme.fg("muted", "Ctrl+c: clear/close"),
+            theme.fg("muted", "Esc: cancel"),
           );
+
+          lines.push("");
+          lines.push(truncateToWidth(footerParts.join(theme.fg("dim", " • ")), width));
 
           return lines;
         },

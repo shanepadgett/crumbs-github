@@ -6,6 +6,10 @@
     {
       "match": "regex",
       "value": "^mise\\s+run\\s+(?:format|lint|typecheck|check)$"
+    },
+    {
+      "match": "prefix",
+      "value": "git show HEAD:"
     }
   ],
   "deny": [],
