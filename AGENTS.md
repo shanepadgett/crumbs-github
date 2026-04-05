@@ -9,3 +9,6 @@
 - Prefer running project commands through `mise` tasks when executing scripts.
   - If a needed action is not available in the listed `mise` tasks, the agent may run commands directly as needed.
   - Always run `mise run check` after modifying .ts files
+- Code is not live yet. Break anything. Change or replace whatever needed. Don't worry about versions or migrations.
+- When modifying code, leave no past remnant unless asked to. Clean up and keep the codebase free of indirection from prior implementations.
+- Any changes to exntensions/ or .pi/extensions requires user to reload before testing.
