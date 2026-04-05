@@ -7,26 +7,31 @@
  * - Injects those instructions and that evidence into the commit turn so the
  *   model can usually decide commit boundaries without first rediscovering the
  *   repository state.
- * - Strongly biases toward a single `git add -A` commit unless the evidence
- *   clearly shows separate semantic changes that should ship independently.
+ * - Guides the model to group semantically related edits together and split
+ *   independent work into separate commits when that makes review/revert safer.
+ * - Writes the exact injected `/commit` context to a report file for review.
  *
  * How to use:
  * - Run `/commit` from inside a git repository with uncommitted changes.
- * - The extension gathers a deterministic evidence packet and immediately asks
- *   the agent to create the commit(s).
+ * - Review `.pi/reports/commit-context.latest.md` to see exactly what context
+ *   gets injected for commit planning.
+ * - The extension gathers a deterministic evidence packet and asks the agent to
+ *   create one or more semantic commits.
  *
  * Example:
- * - Update a feature and its matching tests.
+ * - Update a feature, adjust docs, and include an unrelated refactor.
  * - Run `/commit`.
- * - The agent should usually stage everything with `git add -A` and create one
- *   commit, only splitting when the evidence clearly shows distinct work.
+ * - The agent should keep the feature + docs together and split the unrelated
+ *   refactor into its own commit.
  */
 
 import type { ExtensionAPI, ExtensionCommandContext } from "@mariozechner/pi-coding-agent";
+import { mkdir, writeFile } from "node:fs/promises";
+import { join } from "node:path";
 
-const COMMAND_DESCRIPTION =
-  "Create git commit(s) from deterministic git evidence, defaulting to one commit";
-const COMMIT_TRIGGER_MESSAGE = "Create the git commit(s) for the current changes.";
+const COMMAND_DESCRIPTION = "Create semantic git commit groupings from deterministic git evidence";
+const COMMIT_TRIGGER_MESSAGE =
+  "Create the git commit(s) from the injected /commit context only. Do not run repository inspection commands.";
 const COMMAND_TIMEOUT_MS = 15_000;
 const DIFF_CONTEXT_LINES = 1;
 const MAX_SUMMARY_CHARS = 4_000;
@@ -35,6 +40,7 @@ const MAX_DIFF_SECTION_CHARS = 8_000;
 const MAX_DIFF_SECTION_LINES = 300;
 const MAX_TOTAL_DIFF_CHARS = 80_000;
 const MIN_DIFF_BUDGET_CHARS = 1_500;
+const CONTEXT_REPORT_RELATIVE_PATH = ".pi/reports/commit-context.latest.md";
 
 type OptionalText = string | null;
 
@@ -75,6 +81,10 @@ interface CommitEvidence {
   stagedSummary: string;
   unstagedSummary: string;
   diffBudgetRemainingChars: number;
+}
+
+interface ContextReport {
+  path: string;
 }
 
 const STATUS_LABELS: Record<string, string> = {
@@ -433,22 +443,25 @@ function renderCommitPrompt(evidence: CommitEvidence): string {
   const untracked = evidence.files.map((file) => file.entry).filter((entry) => isUntracked(entry));
 
   const lines: string[] = [
+    "BEGIN INJECTED /commit CONTEXT",
     "You are executing the `/commit` command.",
     "",
     "Commit behavior:",
-    "- Default to one commit.",
-    "- Your first choice should usually be to stage everything with `git add -A` and create exactly one commit.",
-    "- Only split into multiple commits when the evidence clearly shows separate semantic changes that should not ship together.",
-    "- Do not split merely because multiple files changed.",
-    "- Do not split merely because some changes are staged and others are unstaged.",
-    "- Treat the current staged vs unstaged state as informational, not as the intended commit plan.",
-    "- Keep tests, docs, config, and small supporting edits with the code they belong to when they are part of the same logical change.",
+    "- Build commit groups by semantic intent, not by file count or current stage state.",
+    "- Put changes in the same commit when they implement one logical objective and should ship/revert together.",
+    "- Split commits when groups are independently understandable, independently revertable, or represent different intents.",
+    "- Keep tests, docs, config, and small support edits with the code they validate or explain.",
+    "- Avoid a giant catch-all commit when evidence indicates unrelated work.",
+    "- Prefer fewer commits when boundaries are weak, but do not force a single commit.",
+    "- Treat staged vs unstaged as informational only.",
     "- Use the evidence below as your primary source of truth.",
-    "- Avoid rediscovering repository state or reading files unless this evidence is genuinely insufficient to decide commit boundaries or commit messages.",
-    "- If you truly need follow-up inspection, use the narrowest possible command.",
-    "- For each commit, stage intentionally and verify with `git diff --staged` before committing.",
+    "- Do not run repository inspection commands for planning (`git status`, `git diff`, `find`, `ls`, `cat`, `rg`, etc.).",
+    "- Assume this evidence packet is authoritative for planning and grouping.",
+    "- If evidence contains explicit truncation/omission markers and that blocks a safe decision, stop and ask the user for direction instead of probing the repo.",
+    "- For each commit: stage intentionally, verify with `git diff --staged`, then commit.",
     "- Use unscoped conventional commit messages in the form `type: concise why-action summary`.",
-    "- Prefer a single shell request that stages and commits together once the staged set is clear.",
+    "- If there are multiple groups, create commits in an order that keeps intermediate history coherent.",
+    "- Allowed shell operations are only those needed to stage, validate staged content, and commit.",
     "",
     "Deterministic git evidence snapshot:",
     `- repo root: ${evidence.repoRoot}`,
@@ -506,7 +519,18 @@ function renderCommitPrompt(evidence: CommitEvidence): string {
     lines.push("");
   }
 
+  lines.push("END INJECTED /commit CONTEXT");
   return lines.join("\n").trimEnd();
+}
+
+async function writeContextReport(
+  evidence: CommitEvidence,
+  prompt: string,
+): Promise<ContextReport> {
+  const reportPath = join(evidence.repoRoot, CONTEXT_REPORT_RELATIVE_PATH);
+  await mkdir(join(evidence.repoRoot, ".pi", "reports"), { recursive: true });
+  await writeFile(reportPath, `${prompt}\n`, "utf8");
+  return { path: reportPath };
 }
 
 export default function commitExtension(pi: ExtensionAPI): void {
@@ -531,7 +555,17 @@ export default function commitExtension(pi: ExtensionAPI): void {
         return;
       }
 
-      pendingPrompt = renderCommitPrompt(evidence);
+      const prompt = renderCommitPrompt(evidence);
+      pendingPrompt = prompt;
+
+      try {
+        const report = await writeContextReport(evidence, prompt);
+        ctx.ui.notify(`Injected /commit context saved: ${report.path}`, "info");
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        ctx.ui.notify(`Failed to write commit context report: ${message}`, "warning");
+      }
+
       pi.sendUserMessage(COMMIT_TRIGGER_MESSAGE);
     },
   });
