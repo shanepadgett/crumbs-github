@@ -41,6 +41,8 @@ import { createBashOperations, initializeSandbox, resetSandbox } from "./sandbox
 import { renderStatus, syncStatus } from "./status.js";
 import type { PermissionsConfig, RuntimeStatus } from "./types.js";
 
+const PERMISSIONS_MODE_ENTRY = "permissions/mode";
+
 async function confirmProtectedMutation(path: string, ctx: ExtensionContext): Promise<boolean> {
   return ctx.ui.confirm("Protected file mutation", `Allow a direct mutation to ${path}?`);
 }
@@ -86,6 +88,51 @@ export default function permissionsExtension(pi: ExtensionAPI) {
     runtime.networkMode = config.activeMode.networkMode;
   }
 
+  function resolveSessionMode(
+    config: PermissionsConfig,
+    ctx: ExtensionContext,
+  ): string | undefined {
+    const branchEntries = ctx.sessionManager.getBranch();
+
+    for (let index = branchEntries.length - 1; index >= 0; index -= 1) {
+      const entry = branchEntries[index] as {
+        type?: string;
+        customType?: string;
+        data?: unknown;
+      };
+
+      if (entry.type !== "custom" || entry.customType !== PERMISSIONS_MODE_ENTRY) continue;
+      if (!entry.data || typeof entry.data !== "object") continue;
+
+      const mode = (entry.data as { mode?: unknown }).mode;
+      if (typeof mode !== "string" || !config.modes[mode]) continue;
+      return mode;
+    }
+
+    return undefined;
+  }
+
+  function persistSessionMode(mode: string) {
+    pi.appendEntry(PERMISSIONS_MODE_ENTRY, { mode });
+  }
+
+  async function initializeSessionPermissions(ctx: ExtensionContext): Promise<PermissionsConfig> {
+    const config = await reloadConfig(ctx.cwd);
+    const sessionMode = resolveSessionMode(config, ctx);
+
+    if (sessionMode) {
+      currentConfig = withSelectedMode(config, sessionMode);
+      process.env.CRUMBS_PERMISSIONS_MODE = currentConfig.mode;
+      syncRuntime(currentConfig);
+    }
+
+    const activeConfig = currentConfig ?? config;
+    await resetSandbox();
+    await initializeSandbox(ctx, runtime, activeConfig);
+    syncStatus(ctx, runtime, activeConfig.ui.showFooterStatus);
+    return activeConfig;
+  }
+
   async function ensureConfig(cwd: string): Promise<PermissionsConfig> {
     if (currentConfig) return currentConfig;
     currentConfig = await loadPermissionsConfig(cwd);
@@ -101,11 +148,16 @@ export default function permissionsExtension(pi: ExtensionAPI) {
     return currentConfig;
   }
 
-  async function switchMode(nextMode: string, ctx: ExtensionContext): Promise<void> {
+  async function switchMode(
+    nextMode: string,
+    ctx: ExtensionContext,
+    options?: { persist?: boolean },
+  ): Promise<void> {
     const config = await ensureConfig(ctx.cwd);
     currentConfig = withSelectedMode(config, nextMode);
     process.env.CRUMBS_PERMISSIONS_MODE = currentConfig.mode;
     syncRuntime(currentConfig);
+    if (options?.persist) persistSessionMode(currentConfig.mode);
     await resetSandbox();
     await initializeSandbox(ctx, runtime, currentConfig);
     syncStatus(ctx, runtime, currentConfig.ui.showFooterStatus);
@@ -127,9 +179,7 @@ export default function permissionsExtension(pi: ExtensionAPI) {
   });
 
   pi.on("session_start", async (_event, ctx) => {
-    const config = await reloadConfig(ctx.cwd);
-    await initializeSandbox(ctx, runtime, config);
-    syncStatus(ctx, runtime, config.ui.showFooterStatus);
+    const config = await initializeSessionPermissions(ctx);
 
     if (runtime.sandboxReason) {
       const message = config.activeMode.sandbox
@@ -137,6 +187,10 @@ export default function permissionsExtension(pi: ExtensionAPI) {
         : `permissions: ${runtime.sandboxReason}`;
       ctx.ui.notify(message, "warning");
     }
+  });
+
+  pi.on("session_switch", async (_event, ctx) => {
+    await initializeSessionPermissions(ctx);
   });
 
   pi.on("session_shutdown", async () => {
@@ -323,7 +377,7 @@ export default function permissionsExtension(pi: ExtensionAPI) {
       }
     }
 
-    await switchMode(modeKey, ctx);
+    await switchMode(modeKey, ctx, { persist: true });
     const updatedConfig = await ensureConfig(ctx.cwd);
     if (updatedConfig.activeMode.sandbox) {
       ctx.ui.notify(`permissions: ${renderStatus(runtime)}`, "info");
