@@ -1,3 +1,8 @@
+import {
+  ensurePackageManagerDirectories,
+  getPackageManagerEnvironment,
+} from "../shared/package-manager-env.js";
+
 const ALLOWED_ENV_KEYS = new Set([
   "HOME",
   "LANG",
@@ -50,5 +55,9 @@ export function scrubEnvironment(baseEnv: NodeJS.ProcessEnv): NodeJS.ProcessEnv 
     next[key] = value;
   }
 
-  return next;
+  ensurePackageManagerDirectories();
+  return {
+    ...next,
+    ...getPackageManagerEnvironment(),
+  };
 }

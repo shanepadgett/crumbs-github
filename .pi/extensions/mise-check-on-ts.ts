@@ -4,24 +4,26 @@
  * What this does:
  * - Tracks successful `edit`/`write` tool executions touching `.ts` files.
  * - Tracks any `bash` execution that runs `mise run check`.
- * - At `turn_end`, if `.ts` edits happened after the last check, it runs
- *   `mise run check` automatically via `pi.exec("mise", ["run", "check"])`.
- * - Only if that command fails (non-zero exit), it injects a user message
- *   telling the agent to fix issues (with command output tail for context).
+ * - At `turn_end`, only when the turn had no tool calls, it runs
+ *   `mise run check` automatically if `.ts` edits happened after the last check.
+ * - Only if that command fails (non-zero exit), it injects a custom automation
+ *   message with the relevant output so the agent can fix issues without first
+ *   spending another tool call to rerun the check.
  *
  * How to use:
  * - Put this file at `.pi/extensions/mise-check-on-ts.ts` (project-local extension).
  * - Reload extensions with `/reload`.
  *
  * Example:
- * - Agent edits `src/foo.ts` and does not run checks.
- * - Extension runs `mise run check` automatically at turn end.
- * - If failing, extension injects a remediation prompt for the agent.
+ * - Agent edits `src/foo.ts` and reaches a no-tool-call turn.
+ * - Extension runs `mise run check`.
+ * - If failing, extension injects an automation message with output context.
  */
 
 import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
 
 const CHECK_COMMAND_REGEX = /\bmise\s+run\s+check\b/;
+const CUSTOM_MESSAGE_TYPE = "automation.mise-check";
 const MAX_OUTPUT_CHARS = 3_000;
 
 function isTypeScriptPath(pathValue: unknown): boolean {
@@ -42,6 +44,23 @@ function tail(text: string, maxChars: number): string {
 
 function fenceSafe(text: string): string {
   return text.replace(/```/g, "``\\`");
+}
+
+function buildFailureMessage(result: { code: number; stdout?: string; stderr?: string }): string {
+  const stdout = (result.stdout || "").trim();
+  const stderr = (result.stderr || "").trim();
+  const output = [
+    stdout ? `stdout:\n${tail(stdout, MAX_OUTPUT_CHARS)}` : "",
+    stderr ? `stderr:\n${tail(stderr, MAX_OUTPUT_CHARS)}` : "",
+  ]
+    .filter(Boolean)
+    .join("\n\n");
+
+  return [
+    `Automated check failed (exit code ${result.code}).`,
+    "Fix the reported issues and verify with `mise run check` before continuing.",
+    output ? `\n\nRecent output:\n\n\`\`\`text\n${fenceSafe(output)}\n\`\`\`` : "",
+  ].join(" ");
 }
 
 export default function miseCheckOnTsExtension(pi: ExtensionAPI): void {
@@ -66,13 +85,15 @@ export default function miseCheckOnTsExtension(pi: ExtensionAPI): void {
     }
 
     // Any explicit `mise run check` execution counts as a check after the latest edit,
-    // regardless of success/failure, matching the requested semantics.
+    // regardless of success or failure, matching the requested semantics.
     if (event.toolName === "bash" && isCheckCommand(event.input?.command)) {
       lastCheckedTsEditSeq = tsEditSeq;
     }
   });
 
-  pi.on("turn_end", async (_event, ctx) => {
+  pi.on("turn_end", async (event, ctx) => {
+    if (event.toolResults.length > 0) return;
+
     const needsCheck = tsEditSeq > 0 && lastCheckedTsEditSeq < tsEditSeq;
     if (!needsCheck || checkInFlight) return;
 
@@ -80,30 +101,29 @@ export default function miseCheckOnTsExtension(pi: ExtensionAPI): void {
     const result = await pi.exec("mise", ["run", "check"], { signal: ctx.signal });
     checkInFlight = false;
 
-    // Mark this edit generation as checked so we do not re-run until next TS edit.
+    // Mark this edit generation as checked so we do not re-run until the next TS edit.
     lastCheckedTsEditSeq = tsEditSeq;
 
     if (result.code === 0) return;
 
-    const stdout = (result.stdout || "").trim();
-    const stderr = (result.stderr || "").trim();
-    const output = [
-      stdout ? `stdout:\n${tail(stdout, MAX_OUTPUT_CHARS)}` : "",
-      stderr ? `stderr:\n${tail(stderr, MAX_OUTPUT_CHARS)}` : "",
-    ]
-      .filter(Boolean)
-      .join("\n\n");
-
-    const message = [
-      `Automated check failed (exit code ${result.code}).`,
-      "Fix the reported issues and verify with `mise run check` before continuing.",
-      output ? `\n\nRecent output:\n\n\`\`\`text\n${fenceSafe(output)}\n\`\`\`` : "",
-    ].join(" ");
+    const content = buildFailureMessage(result);
+    const message = {
+      customType: CUSTOM_MESSAGE_TYPE,
+      content,
+      display: true,
+      details: {
+        command: "mise run check",
+        exitCode: result.code,
+        stdout: result.stdout || "",
+        stderr: result.stderr || "",
+        tsEditSeq,
+      },
+    };
 
     if (ctx.isIdle()) {
-      pi.sendUserMessage(message);
+      pi.sendMessage(message, { deliverAs: "steer", triggerTurn: true });
     } else {
-      pi.sendUserMessage(message, { deliverAs: "steer" });
+      pi.sendMessage(message, { deliverAs: "steer" });
     }
   });
 }
