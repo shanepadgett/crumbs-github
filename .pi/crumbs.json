@@ -16,7 +16,16 @@
         }
       }
     },
-    "blockedPaths": [".env", ".env.*", "~/.ssh/", "~/.aws/", "~/.gnupg/", "docs/_hidden/"],
+    "blockedPaths": [
+      ".env",
+      ".env.*",
+      "~/.ssh/",
+      "~/.aws/",
+      "~/.gnupg/",
+      "docs/_hidden/",
+      "external/codex/",
+      "external/claude-code/"
+    ],
     "protectedMutationPaths": [
       ".pi/crumbs.json",
       "AGENTS.md",
