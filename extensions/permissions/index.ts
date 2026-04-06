@@ -72,8 +72,7 @@ function extractApplyPatchTargets(input: string): string[] {
 }
 
 export default function permissionsExtension(pi: ExtensionAPI) {
-  const localCwd = process.cwd();
-  const localBash = createBashTool(localCwd);
+  const baseBashTool = createBashTool(process.cwd());
   let currentConfig: PermissionsConfig | undefined;
   const runtime: RuntimeStatus = {
     modeKey: "workspace",
@@ -128,7 +127,7 @@ export default function permissionsExtension(pi: ExtensionAPI) {
 
     const activeConfig = currentConfig ?? config;
     await resetSandbox();
-    await initializeSandbox(ctx, runtime, activeConfig);
+    await initializeSandbox(ctx, runtime, activeConfig, pi.exec);
     syncStatus(ctx, runtime, activeConfig.ui.showFooterStatus);
     return activeConfig;
   }
@@ -159,21 +158,21 @@ export default function permissionsExtension(pi: ExtensionAPI) {
     syncRuntime(currentConfig);
     if (options?.persist) persistSessionMode(currentConfig.mode);
     await resetSandbox();
-    await initializeSandbox(ctx, runtime, currentConfig);
+    await initializeSandbox(ctx, runtime, currentConfig, pi.exec);
     syncStatus(ctx, runtime, currentConfig.ui.showFooterStatus);
   }
 
   pi.registerTool({
-    ...localBash,
+    ...baseBashTool,
     label: "bash (permissions)",
-    async execute(id, params, signal, onUpdate) {
-      const config = await ensureConfig(localCwd);
-      const operations = createBashOperations(runtime, config);
+    async execute(id, params, signal, onUpdate, ctx) {
+      const config = await ensureConfig(ctx.cwd);
+      const operations = createBashOperations(runtime, config, pi.exec);
       if (!operations) {
-        return localBash.execute(id, params, signal, onUpdate);
+        return createBashTool(ctx.cwd).execute(id, params, signal, onUpdate);
       }
 
-      const sandboxedBash = createBashTool(localCwd, { operations });
+      const sandboxedBash = createBashTool(ctx.cwd, { operations });
       return sandboxedBash.execute(id, params, signal, onUpdate);
     },
   });
@@ -357,8 +356,6 @@ export default function permissionsExtension(pi: ExtensionAPI) {
       }
     }
 
-    const operations = createBashOperations(runtime, config);
-    if (operations) return { operations };
     return { operations: createLocalBashOperations() };
   });
 

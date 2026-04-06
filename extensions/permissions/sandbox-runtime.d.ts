@@ -16,7 +16,12 @@ declare module "@anthropic-ai/sandbox-runtime" {
   export const SandboxManager: {
     initialize(config: SandboxRuntimeConfig): Promise<void>;
     reset(): Promise<void>;
-    wrapWithSandbox(command: string): Promise<string>;
+    wrapWithSandbox(
+      command: string,
+      binShell?: string,
+      customConfig?: Partial<SandboxRuntimeConfig>,
+      abortSignal?: AbortSignal,
+    ): Promise<string>;
   };
 
   export function getDefaultWritePaths(): string[];

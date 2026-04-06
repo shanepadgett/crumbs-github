@@ -5,31 +5,52 @@ import { wrapCommandWithSandboxLinux } from "@anthropic-ai/sandbox-runtime/dist/
 import { wrapCommandWithSandboxMacOS } from "@anthropic-ai/sandbox-runtime/dist/sandbox/macos-sandbox-utils.js";
 import { getDefaultWritePaths } from "@anthropic-ai/sandbox-runtime/dist/sandbox/sandbox-utils.js";
 import type { BashOperations, ExtensionContext } from "@mariozechner/pi-coding-agent";
-import { resolveConfiguredPath } from "./config.js";
 import { scrubEnvironment } from "./env.js";
-import type { PermissionsConfig, ResolvedPermissionMode, RuntimeStatus } from "./types.js";
+import { createMacOsSeatbeltLaunchSpec } from "./macos-seatbelt.js";
+import { resolvePermissionRepoScope, resolveShellFilesystem } from "./repo-scope.js";
+import type { PermissionsConfig, PermissionsExec, RuntimeStatus } from "./types.js";
 
 let restrictedInitialized = false;
 let restrictedEnabled = false;
 
-function filesystemForMode(cwd: string, mode: ResolvedPermissionMode, config: PermissionsConfig) {
-  return {
-    denyRead: config.blockedPaths.map((path) => resolveConfiguredPath(cwd, path)),
-    allowWrite: mode.shellWriteRoots.map((path) => resolveConfiguredPath(cwd, path)),
-    denyWrite: config.blockedPaths.map((path) => resolveConfiguredPath(cwd, path)),
-  };
-}
+type WrappedCommand =
+  | {
+      kind: "shell";
+      command: string;
+    }
+  | {
+      kind: "spawn";
+      program: string;
+      args: string[];
+    };
 
 async function wrapCommand(
   command: string,
   cwd: string,
   config: PermissionsConfig,
-): Promise<string> {
+  exec: PermissionsExec,
+  signal?: AbortSignal,
+): Promise<WrappedCommand> {
+  const filesystem = await resolveShellFilesystem(exec, cwd, config.activeMode, config, command);
+
   if (config.activeMode.networkMode === "restricted") {
-    return SandboxManager.wrapWithSandbox(command);
+    return {
+      kind: "shell",
+      command: await SandboxManager.wrapWithSandbox(
+        command,
+        undefined,
+        {
+          network: {
+            allowedDomains: config.network.allowedDomains,
+            deniedDomains: [],
+          },
+          filesystem,
+        },
+        signal,
+      ),
+    };
   }
 
-  const filesystem = filesystemForMode(cwd, config.activeMode, config);
   const readConfig = {
     denyOnly: filesystem.denyRead,
   };
@@ -39,26 +60,48 @@ async function wrapCommand(
   };
 
   if (process.platform === "linux") {
-    return wrapCommandWithSandboxLinux({
+    return {
+      kind: "shell",
+      command: await wrapCommandWithSandboxLinux({
+        command,
+        needsNetworkRestriction: false,
+        readConfig,
+        writeConfig,
+      }),
+    };
+  }
+
+  const customMacOsSeatbelt = createMacOsSeatbeltLaunchSpec({
+    command,
+    allowNetwork: true,
+    readConfig,
+    writeConfig,
+  });
+
+  if (customMacOsSeatbelt) {
+    return {
+      kind: "spawn",
+      program: customMacOsSeatbelt.program,
+      args: customMacOsSeatbelt.args,
+    };
+  }
+
+  return {
+    kind: "shell",
+    command: wrapCommandWithSandboxMacOS({
       command,
       needsNetworkRestriction: false,
       readConfig,
       writeConfig,
-    });
-  }
-
-  return wrapCommandWithSandboxMacOS({
-    command,
-    needsNetworkRestriction: false,
-    readConfig,
-    writeConfig,
-  });
+    }),
+  };
 }
 
 export async function initializeSandbox(
   ctx: ExtensionContext,
   runtime: RuntimeStatus,
   config: PermissionsConfig,
+  exec: PermissionsExec,
 ): Promise<void> {
   const mode = config.activeMode;
 
@@ -87,12 +130,13 @@ export async function initializeSandbox(
   }
 
   try {
+    const filesystem = await resolveShellFilesystem(exec, ctx.cwd, mode, config);
     await SandboxManager.initialize({
       network: {
         allowedDomains: config.network.allowedDomains,
         deniedDomains: [],
       },
-      filesystem: filesystemForMode(ctx.cwd, mode, config),
+      filesystem,
     });
     restrictedEnabled = true;
     restrictedInitialized = true;
@@ -120,6 +164,7 @@ export async function resetSandbox() {
 export function createBashOperations(
   runtime: RuntimeStatus,
   config: PermissionsConfig,
+  exec: PermissionsExec,
 ): BashOperations | null {
   if (!config.activeMode.sandbox || runtime.sandboxState !== "on") return null;
   if (
@@ -135,16 +180,33 @@ export function createBashOperations(
         throw new Error(`Working directory does not exist: ${cwd}`);
       }
 
-      const wrappedCommand = await wrapCommand(command, cwd, config);
+      const repoScope = await resolvePermissionRepoScope(exec, cwd);
+      const wrappedCommand = await wrapCommand(command, cwd, config, exec, signal);
+
+      const child =
+        wrappedCommand.kind === "spawn"
+          ? spawn(wrappedCommand.program, wrappedCommand.args, {
+              cwd,
+              detached: true,
+              stdio: ["ignore", "pipe", "pipe"],
+              env: scrubEnvironment({
+                ...process.env,
+                PWD: cwd,
+                CRUMBS_SANDBOX_SCOPE_KEY: `${repoScope.worktreeRoot}:${config.activeMode.key}`,
+              }),
+            })
+          : spawn("bash", ["-c", wrappedCommand.command], {
+              cwd,
+              detached: true,
+              stdio: ["ignore", "pipe", "pipe"],
+              env: scrubEnvironment({
+                ...process.env,
+                PWD: cwd,
+                CRUMBS_SANDBOX_SCOPE_KEY: `${repoScope.worktreeRoot}:${config.activeMode.key}`,
+              }),
+            });
 
       return new Promise((resolvePromise, reject) => {
-        const child = spawn("bash", ["-c", wrappedCommand], {
-          cwd,
-          detached: true,
-          stdio: ["ignore", "pipe", "pipe"],
-          env: scrubEnvironment({ ...process.env, PWD: cwd }),
-        });
-
         let timedOut = false;
         let timeoutHandle: NodeJS.Timeout | undefined;
 

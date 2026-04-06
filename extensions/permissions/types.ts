@@ -1,3 +1,5 @@
+import type { ExecOptions } from "@mariozechner/pi-coding-agent";
+
 export type BasePermissionMode = "read-only" | "workspace" | "full-access";
 export type DirectMutationPolicy = "none" | "workspace" | "any" | "paths";
 export type NetworkMode = "restricted" | "open";
@@ -61,4 +63,34 @@ export interface RuntimeStatus {
 export interface InterlockMatch {
   label: string;
   reason: string;
+}
+
+export type PermissionsExec = (
+  command: string,
+  args: string[],
+  options?: ExecOptions,
+) => Promise<{ code: number; stdout: string; stderr: string }>;
+
+export interface PermissionRepoScope {
+  sessionCwd: string;
+  worktreeRoot: string;
+  repoIdentityRoot: string;
+  gitPointerPath?: string;
+  gitDir?: string;
+  gitCommonDir?: string;
+}
+
+export interface PermissionScratchSpace {
+  root: string;
+  home: string;
+  tmp: string;
+  cache: string;
+  state: string;
+  data: string;
+}
+
+export interface PermissionFilesystem {
+  denyRead: string[];
+  allowWrite: string[];
+  denyWrite: string[];
 }

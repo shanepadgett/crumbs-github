@@ -1,7 +1,7 @@
 {
   "$schema": "../schemas/crumbs.schema.json",
   "permissions": {
-    "mode": "research",
+    "mode": "workspace",
     "modes": {
       "research": {
         "label": "research",

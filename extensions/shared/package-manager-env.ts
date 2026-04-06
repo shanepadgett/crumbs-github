@@ -1,5 +1,7 @@
+import { createHash } from "node:crypto";
 import { mkdirSync } from "node:fs";
 import { join } from "node:path";
+import type { PermissionScratchSpace } from "../permissions/types.js";
 
 const DEFAULT_SANDBOX_TMPDIR = "/tmp/claude";
 
@@ -14,21 +16,52 @@ export function getSandboxTempDir(): string {
   return trimTrailingSlash(configured);
 }
 
-export function getPackageManagerEnvironment(): Record<string, string> {
-  const tmpdir = getSandboxTempDir();
-  const npmCacheDir = join(tmpdir, "npm-cache");
+function scopeHash(scopeKey: string): string {
+  return createHash("sha1").update(scopeKey).digest("hex").slice(0, 12);
+}
+
+export function getSandboxScratchSpace(scopeKey = "default"): PermissionScratchSpace {
+  const root = join(getSandboxTempDir(), "permissions", scopeHash(scopeKey));
 
   return {
-    TMPDIR: tmpdir,
-    BUN_INSTALL_CACHE_DIR: join(tmpdir, "bun-install-cache"),
-    XDG_CACHE_HOME: join(tmpdir, "xdg-cache"),
+    root,
+    home: join(root, "home"),
+    tmp: join(root, "tmp"),
+    cache: join(root, "cache"),
+    state: join(root, "state"),
+    data: join(root, "data"),
+  };
+}
+
+export function getPackageManagerEnvironment(scopeKey?: string): Record<string, string> {
+  const scratch = getSandboxScratchSpace(scopeKey);
+  const npmCacheDir = join(scratch.cache, "npm-cache");
+
+  return {
+    HOME: scratch.home,
+    TMPDIR: scratch.tmp,
+    XDG_CACHE_HOME: scratch.cache,
+    XDG_STATE_HOME: scratch.state,
+    XDG_DATA_HOME: scratch.data,
+    BUN_INSTALL_CACHE_DIR: join(scratch.cache, "bun-install-cache"),
     NPM_CONFIG_CACHE: npmCacheDir,
     npm_config_cache: npmCacheDir,
   };
 }
 
-export function ensurePackageManagerDirectories(): void {
-  for (const directory of new Set(Object.values(getPackageManagerEnvironment()))) {
+export function ensurePackageManagerDirectories(scopeKey?: string): void {
+  const scratch = getSandboxScratchSpace(scopeKey);
+  const directories = new Set([
+    scratch.root,
+    scratch.home,
+    scratch.tmp,
+    scratch.cache,
+    scratch.state,
+    scratch.data,
+    ...Object.values(getPackageManagerEnvironment(scopeKey)),
+  ]);
+
+  for (const directory of directories) {
     try {
       mkdirSync(directory, { recursive: true });
     } catch {

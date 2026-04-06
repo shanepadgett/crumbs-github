@@ -55,9 +55,10 @@ export function scrubEnvironment(baseEnv: NodeJS.ProcessEnv): NodeJS.ProcessEnv 
     next[key] = value;
   }
 
-  ensurePackageManagerDirectories();
+  const scopeKey = baseEnv.CRUMBS_SANDBOX_SCOPE_KEY ?? "default";
+  ensurePackageManagerDirectories(scopeKey);
   return {
     ...next,
-    ...getPackageManagerEnvironment(),
+    ...getPackageManagerEnvironment(scopeKey),
   };
 }
