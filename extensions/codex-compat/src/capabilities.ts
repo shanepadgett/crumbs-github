@@ -3,10 +3,8 @@ import type { Model } from "@mariozechner/pi-ai";
 export interface CodexCompatCapabilities {
   provider: string;
   modelId: string;
-  compatEnabled: boolean;
   supportsImageInput: boolean;
   supportsOriginalImageDetail: boolean;
-  patchMode: "json" | "freeform";
   preserveCustomTools: boolean;
 }
 
@@ -18,10 +16,8 @@ function capability(
   return {
     provider,
     modelId,
-    compatEnabled: true,
     supportsImageInput: true,
     supportsOriginalImageDetail: true,
-    patchMode: "json",
     preserveCustomTools: true,
     ...overrides,
   };
