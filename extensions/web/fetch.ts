@@ -6,8 +6,9 @@
  * - Supports inline image return and output truncation for large pages.
  *
  * How to use it:
- * - This tool is primarily internal to `webresearch`.
- * - Set `CRUMBS_ENABLE_RAW_WEB_TOOLS=1` to expose it directly for debugging.
+ * - Use it directly in the current Pi session to inspect a specific URL.
+ * - Prefer this when you need raw page content, not a synthesized research report.
+ * - `webresearch` also uses this tool in its isolated child agent.
  *
  * Example:
  * - "Fetch https://bun.sh/docs and return markdown"
@@ -22,7 +23,6 @@ import {
   ensureHttpUrl,
   isImageMime,
   mimeFromType,
-  shouldRegisterRawWebTools,
   truncateInline,
   WEBFETCH_DEFAULT_TIMEOUT,
   WEBFETCH_MAX_BYTES,
@@ -53,8 +53,6 @@ interface WebFetchDetails {
 }
 
 export default function webFetchExtension(pi: ExtensionAPI) {
-  if (!shouldRegisterRawWebTools()) return;
-
   pi.registerTool({
     name: "webfetch",
     label: "Web Fetch",
@@ -62,6 +60,7 @@ export default function webFetchExtension(pi: ExtensionAPI) {
       "Fetch a URL and return page content as markdown, text, or html. Supports inline image output. Response body capped at 5MB.",
     promptSnippet: "Fetch a specific URL and extract readable content",
     promptGuidelines: [
+      "Use webfetch when you already have a URL and want direct page content.",
       "Use webfetch after identifying a concrete URL to inspect.",
       "Prefer markdown or text format for summarization and citation tasks.",
     ],

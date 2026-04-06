@@ -7,6 +7,7 @@
  *
  * How to use it:
  * - Provide `task` plus `query`, `urls`, or both.
+ * - Use this when the task needs search + evidence gathering + a synthesized report.
  * - Provide `responseShape` so the returned synthesis matches exactly what you need.
  * - Optionally cap breadth with `maxResults`, `maxSearches`, and `maxFetches`.
  *
@@ -267,7 +268,8 @@ export default function webResearchExtension(pi: ExtensionAPI) {
       "Research a task with an isolated web research subagent. It can web-search, code-search, fetch pages, and return targeted findings.",
     promptSnippet: "Run isolated web research and return targeted findings",
     promptGuidelines: [
-      "Prefer webresearch for all web information gathering, including single URLs.",
+      "Use webresearch when you need discovery across sources plus a synthesized answer.",
+      "Use webfetch directly when you already have a URL and want raw page content.",
       "Always provide responseShape so results match the exact output format you need.",
       "Use researchMode=fast for speed/cost, balanced for normal work, and deep for broader/stronger runs.",
       "Provide specific goals and constraints in task/query for better signal.",
