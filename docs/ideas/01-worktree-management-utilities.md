@@ -42,6 +42,29 @@ Each workspace should feel like:
 
 This is much easier to reason about than constant branch switching in a single checkout.
 
+## Workspace location
+
+New workspaces should live beside the lobby checkout by default, not inside it.
+
+Example:
+
+- `~/code/crumbs` → lobby
+- `~/code/crumbs-feature-a` → workspace for `feature-a`
+- `~/code/crumbs-bug-repro` → workspace for `bug-repro`
+
+This is the best default because it:
+
+- keeps the lobby checkout clean
+- makes each workspace path obvious
+- matches normal Git worktree habits
+- keeps cleanup straightforward
+
+The expected behavior is:
+
+- Pi creates sibling directories using a predictable naming pattern
+- Pi makes removal easy enough that users do not accumulate stale workspaces
+- Pi does not create nested worktrees inside the current repository
+
 ## How this should work inside Pi
 
 The extension should not rely on changing the user's outer shell directory. Instead, it should use Pi's session model.
@@ -63,31 +86,28 @@ This gives us clear semantics:
 
 ## TUI shape
 
-The main interaction surface should be a custom overlay or modal inside Pi's TUI.
+The chosen reference is the tree-style workspaces UI, not a centered modal.
 
-That is the best fit for this feature because it:
+It should feel closer to Pi's built-in session tree:
 
-- keeps the current conversation visible underneath
-- feels like a native workspace switcher instead of a shell command helper
-- works well for list, create, remove, and doctor flows
-- gives enough room to show branch, path, state, and actions clearly
+- horizontal rules instead of a boxed panel
+- a title line like `Workspaces (Lobby)` or `Workspaces (<current workspace>)`
+- one compact hint line
+- one search line
+- then the workspace list
 
-The main worktree manager should probably be a single overlay with modes or subviews for:
+This keeps the UI feeling native to Pi. It reads like a selector or switcher, not like a settings dialog.
 
-- workspace list
-- create workspace
-- doctor / repair helpers
-- remove confirmation
+The list is the main event. It should carry almost all useful information directly in each row, so the UI does not need a duplicate detail pane or bottom status bar.
 
 The workspace list should show the important state at a glance:
 
 - workspace name or label
 - branch
-- path
 - dirty or clean state
-- whether Pi already has a session for that workspace
+- path only as a secondary, de-emphasized line when needed
 
-Likely actions in the overlay:
+Likely actions in the workspaces UI:
 
 - open
 - new
@@ -95,47 +115,43 @@ Likely actions in the overlay:
 - remove
 - doctor
 
-Outside the overlay, Pi should use lighter UI elements only for orientation.
+Create, doctor, and remove flows can still use follow-up overlays, prompts, or subviews. But the top-level workspaces UI should stay a fast searchable list first.
+
+Outside the workspaces UI, Pi should use only minimal orientation chrome.
 
 Good supporting UI:
 
-- a small footer indicator showing whether Pi is in the lobby or in a workspace
-- optionally a small widget with the current workspace name, branch, or status
+- a small status indicator showing lobby vs workspace
+- optionally the current workspace name in the title or status area
 
-Those supporting elements should stay lightweight. They should help users remember where Pi is operating without turning the rest of the interface into a dashboard.
+Those supporting elements should stay lightweight. They should only answer "where am I operating right now?"
 
-The main interaction should not rely only on basic select/input dialogs, and it should not be built primarily as a widget. Those are useful support pieces, but the core experience should feel like a proper workspace manager.
+## Build now
 
-## Build first
-
-The first build should stay narrow and opinionated around the lobby/workspace model.
+The build should stay narrow and opinionated around the lobby/workspace model.
 
 Core capabilities:
 
 - **List workspaces**
-  - show branch, path, dirty state, and whether a session already exists
+  - show branch, dirty state, and path in a secondary line when helpful
 - **Create workspace**
-  - create a worktree from a new or existing branch
+  - create a worktree from a new branch
   - optionally switch into it immediately
 - **Open workspace**
-  - switch Pi to the session for that worktree path
+  - resume the existing Pi session for that worktree path when one exists
+  - otherwise create a new Pi session for that worktree path
 - **Return to lobby**
   - switch back to the base checkout session
 - **Remove workspace safely**
   - warn or block on dirty state
   - remove the worktree cleanly instead of leaving stale registrations
-- **Doctor**
-  - explain common blockers
-  - prune stale registrations
-  - help answer questions like which worktree currently owns this branch
 
-The first build should probably use a modal or overlay inside the TUI as the main interaction surface. That UI should show a simple workspace list and offer actions like:
+The main interaction surface should use the tree-style workspaces UI described above. That UI should show a simple searchable workspace list and offer actions like:
 
 - new
 - open
 - return to lobby
 - remove
-- doctor
 
 ## Why this is the right starting point
 
@@ -158,9 +174,9 @@ So the most natural implementation is not arbitrary cwd mutation inside one long
 
 That is native to Pi and avoids fake shell-like behavior.
 
-## Build later
+## Add later
 
-Once the basic lobby/workspace model feels good, this can grow into a more complete workspace layer.
+Once the basic lobby/workspace model is in place, this can grow into a more complete workspace layer.
 
 Useful later additions:
 
@@ -174,6 +190,7 @@ Useful later additions:
   - warn if branch is unmerged
   - remove workspace and return to lobby
 - add better recovery flows
+  - explain when a branch is already checked out in another worktree
   - repair moved worktrees
   - convert detached experiments into named branches
   - unlock or explain locked worktrees
@@ -196,3 +213,16 @@ Git should remain the source of truth for worktree state. Pi should provide the 
 - clear workspace switching semantics
 - safer cleanup and recovery
 - a TUI that makes parallel work understandable
+
+## Recommended implementation decisions
+
+To keep the feature coherent, the implementation should assume:
+
+- **Default location**: sibling directories beside the lobby checkout
+- **Main UI**: tree-style workspaces selector
+- **Create**: new branch only
+- **Open**: resume existing Pi session for that workspace path, or create one if none exists
+- **Remove**: block on dirty workspaces
+- **Persistence**: minimal Pi-specific metadata at first
+
+For lobby detection, Pi should treat the session started in the base repository path as the lobby for that repository. In practice, the lobby is just the non-worktree base checkout session for that repo root.
