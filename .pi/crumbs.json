@@ -23,7 +23,8 @@
       "~/.aws/",
       "~/.gnupg/",
       "docs/_hidden/",
-      "extensions/permissions/"
+      "extensions/permissions/",
+      "external/"
     ],
     "protectedMutationPaths": [
       ".pi/crumbs.json",
