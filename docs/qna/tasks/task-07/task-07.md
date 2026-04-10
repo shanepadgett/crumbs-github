@@ -37,7 +37,7 @@ Everything here is persistence and serialization. It is one committable and test
 - `questions.json` shall keep all linked Grill Me question records in their current shared state, including answered and skipped questions, instead of only unresolved questions.
 - `questions.json` shall store only each question's current shared state and latest submitted answer or note.
 - `questions.json` shall not store transition history, rejected drafts, or intermediate edit history.
-- `questions.json` shall keep enough structural data for deterministic resume without an LLM pass, including prompt, kind, option IDs, dependencies, follow-up activation rules, current shared state, and linked note fields.
+- `questions.json` shall keep enough structural data for deterministic resume without an LLM pass, including prompt, kind, option IDs, dependencies, question-graph activation rules, current shared state, and linked note fields.
 - `questions.json` shall store question records as an ordered array with explicit `questionId` fields.
 - Each committed Grill Me question record shall use one normalized `currentState` object.
 - Topic grouping shall not be stored on question records and shall instead be derived by the agent during spec compilation.
@@ -50,18 +50,19 @@ Everything here is persistence and serialization. It is one committable and test
 - `spec.json` and `resume-packet.json` shall be refreshed only at pause, completion, and cross-chat resume checkpoints, with a stale flag in between.
 - The system shall maintain local runtime state under `.pi/local/interviews/<grillSessionId>.json`.
 - `.pi/local/` shall be a git-ignored repo-local scratch area.
-- The local runtime file shall store current chat attachment, unsent drafts keyed by `questionId`, and local stale flags.
+- The local runtime file shall store current chat attachment, Grill Me-owned persisted copies of unsent shared-runtime drafts keyed by `questionId`, and local stale flags.
 - Unsent Grill Me form drafts shall remain local-only runtime state.
+- Grill Me shall own durable storage of interview drafts outside the live shared runtime form.
 
 ## Expected end-to-end outcome
 
 - Grill Me sessions have a stable on-disk shape that can be created, discovered, read, and regenerated deterministically.
-- Canonical committed state lives in `questions.json`, while local-only chat attachment and unsent drafts stay outside versioned interview files.
+- Canonical committed state lives in `questions.json`, while local-only chat attachment and Grill Me-owned draft state stay outside versioned interview files.
 - `spec.json` and `resume-packet.json` can be regenerated from canonical question state instead of becoming independent sources of truth.
 
 ## User test at exit
 
 1. Create a test Grill Me session and confirm the expected directory and file set appears under `.pi/interviews/<grillSessionId>/`.
-2. Confirm `.pi/local/interviews/<grillSessionId>.json` stores only local runtime state.
+2. Confirm `.pi/local/interviews/<grillSessionId>.json` stores only local runtime state and Grill Me-owned persisted drafts.
 3. Edit canonical question state, regenerate derived files, and confirm `meta.json` revision and stale markers update correctly.
 4. Scan `.pi/interviews/*/meta.json` and confirm sessions can be discovered without a committed index file.

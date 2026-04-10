@@ -2,7 +2,7 @@
 
 ## Overview
 
-Add the interactive `/qna` loop behavior around the ledger-backed extraction pipeline. This task scopes the agent-facing `qna` tool to a single loop, keeps ordinary chat clarification available when structured capture is unnecessary, and defines how empty runs, untouched questions, and loop completion behave.
+Add the interactive `/qna` loop behavior around the ledger-backed extraction pipeline. This task scopes the agent-facing `qna` tool above the shared runtime, keeps ordinary chat clarification available when structured capture is unnecessary, and defines how empty runs, untouched questions, and loop completion behave.
 
 ## Grouping methodology
 
@@ -23,6 +23,7 @@ This is one committable and testable unit because it completes the user-facing `
 - `/qna` shall be user initiated.
 - `/qna` shall run in smart merged mode without a mode picker.
 - When the user starts `/qna`, the system shall activate the agent-facing `qna` tool only for the current QnA loop.
+- The agent-facing `qna` tool shall remain distinct from the low-level shared question-runtime request tool and shall use that runtime only when structured forms are needed.
 - While the agent-facing `qna` tool is active for `/qna`, the system shall still allow the agent to ask ordinary clarifying questions in chat when structured capture is unnecessary.
 - When the current `/qna` loop settles, the system shall deactivate the agent-facing `qna` tool.
 - When the current chat is attached to a Grill Me interview session, the system shall block `/qna` and direct the user back to Grill Me instead of mixing the two systems in one chat.
@@ -35,7 +36,7 @@ This is one committable and testable unit because it completes the user-facing `
 
 ## Expected end-to-end outcome
 
-- A user can run `/qna` as a scoped manual loop, answer some questions, leave others open, and exit cleanly without losing unresolved backlog.
+- A user can run `/qna` as a scoped manual loop layered above the shared runtime, answer some questions, leave others open, and exit cleanly without losing unresolved backlog.
 - Empty `/qna` runs do not show dead-end UI and instead update the scan boundary and notify the user.
 - `/qna` refuses to run inside an attached Grill Me chat.
 

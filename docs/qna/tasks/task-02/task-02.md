@@ -2,11 +2,11 @@
 
 ## Overview
 
-Implement the shared question experience inside the runtime form. This task covers all supported question kinds, recommendation and justification rendering, answer controls, `Other` handling, notes, and the full per-question state model users interact with directly.
+Implement the shared question experience inside the runtime form. This task covers all supported question kinds, recommendation and justification rendering, answer controls, reserved option-ID handling, notes, and the full per-question state model users interact with directly.
 
 ## Grouping methodology
 
-This is one committable and testable unit because it delivers the complete answer-entry surface for a static question payload without needing transcript extraction, session storage, or branch activation logic. A single mixed-question fixture can exercise the whole slice.
+This is one committable and testable unit because it delivers the complete answer-entry surface for a static question payload without needing transcript extraction, session storage, or graph activation logic. A single mixed-question fixture can exercise the whole slice.
 
 ## Dependencies
 
@@ -33,8 +33,10 @@ This is one committable and testable unit because it delivers the complete answe
 - When the question kind is `multiple_choice`, the system shall render recommended options inline on option rows.
 - When the question kind is `yes_no`, the system shall render the recommended side inline on the yes or no choice.
 - Every `multiple_choice` question shall declare `selectionMode: single | multi` explicitly.
-- Every `multiple_choice` question shall append an `Other` option automatically.
-- Every `yes_no` question shall model `yes` and `no` as explicit option IDs.
+- The shared runtime shall reserve option IDs `yes`, `no`, and `other`.
+- Every `multiple_choice` question shall append an `Other` option automatically using `optionId: other`.
+- Agent-authored `multiple_choice` options shall not redundantly include the automatic `Other` option.
+- Every `yes_no` question shall model `yes` and `no` using the reserved option IDs `yes` and `no`.
 - A `multiple_choice` option may include optional description or subtext.
 - When `selectionMode` is `multi`, the system shall allow the agent to recommend more than one option.
 - The system shall not impose an artificial cap on the number of agent-provided `multiple_choice` options.
@@ -69,5 +71,5 @@ This is one committable and testable unit because it delivers the complete answe
 
 1. Open one form containing all three question kinds.
 2. Confirm recommendations, justifications, and freeform suggested answers render in the right places.
-3. Confirm `Other` requires text, multi-select supports multiple selections, and notes only stick to allowed places.
+3. Confirm reserved `yes` / `no` / `other` behavior, `Other` text requirements, multi-select behavior, and note restrictions.
 4. Mark questions `skipped` and `needs_clarification`, then reopen and answer them normally.
