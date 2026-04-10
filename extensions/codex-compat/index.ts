@@ -21,6 +21,7 @@ import { keyHint, type ExtensionAPI } from "@mariozechner/pi-coding-agent";
 import { Text } from "@mariozechner/pi-tui";
 import { Type } from "@sinclair/typebox";
 import { applyPatch, type ApplyPatchSummary } from "./src/apply-patch.js";
+import { parseApplyPatchInvocation } from "./src/apply-patch-invocation.js";
 import { type CodexCompatCapabilities, getCodexCompatCapabilities } from "./src/capabilities.js";
 import { loadImageFile } from "./src/view-image.js";
 
@@ -31,7 +32,7 @@ const KEPT_BUILTINS = ["read", "bash"] as const;
 const APPLY_PATCH_PARAMS = Type.Object({
   input: Type.String({
     description:
-      "Full patch text. Use *** Begin Patch / *** End Patch with Add/Update/Delete File sections and optional *** Move to: lines.",
+      "Patch body or explicit apply_patch invocation. Patch bodies use *** Begin Patch / *** End Patch with Add/Update/Delete File sections, optional *** Move to, and optional *** End of File in update chunks.",
   }),
 });
 
@@ -120,37 +121,28 @@ function renderApplyPatchResult(result: any, options: { expanded: boolean }, the
 }
 
 function formatApplyPatchContent(summary: ApplyPatchSummary): string {
-  const lines = [
-    "Applied patch successfully.",
-    `Added files: ${summary.added.length}`,
-    `Updated files: ${summary.updated.length}`,
-    `Deleted files: ${summary.deleted.length}`,
-    `Moved files: ${summary.moved.length}`,
-  ];
+  const files: string[] = [];
+  for (const path of summary.added) files.push(`A ${path}`);
+  for (const path of summary.updated) files.push(`M ${path}`);
+  for (const path of summary.deleted) files.push(`D ${path}`);
+  for (const move of summary.moved) files.push(`R ${move.from} -> ${move.to}`);
 
-  if (summary.added.length > 0) {
-    lines.push(`Added: ${summary.added.join(", ")}`);
-  }
-  if (summary.updated.length > 0) {
-    lines.push(`Updated: ${summary.updated.join(", ")}`);
-  }
-  if (summary.deleted.length > 0) {
-    lines.push(`Deleted: ${summary.deleted.join(", ")}`);
-  }
-  if (summary.moved.length > 0) {
-    lines.push(`Moved: ${summary.moved.map((move) => `${move.from} -> ${move.to}`).join(", ")}`);
+  if (files.length === 0) {
+    return "Success. No files were modified.";
   }
 
-  return lines.join("\n");
+  return ["Success. Updated the following files:", ...files].join("\n");
 }
 
 function buildCompatPromptDelta(): string {
   return [
     "Codex compatibility mode is active for this model.",
     "- Keep using builtin read and bash for file reads and command execution.",
-    "- Prefer apply_patch for edits, file creation, file deletion, and coordinated multi-file changes. Put the full patch text in the input field.",
-    "- Prefer a single apply_patch call that updates all related files together when one coherent patch will do.",
-    "- When making coordinated edits across multiple files, include them in one apply_patch call instead of splitting them into separate patches.",
+    "- Prefer apply_patch for edits, file creation, file deletion, moves, and coordinated multi-file changes.",
+    "- For apply_patch, send either a raw patch body or an explicit apply_patch/applypatch invocation.",
+    "- Patch grammar: *** Begin Patch / *** End Patch with Add/Update/Delete File sections, optional *** Move to, optional *** End of File for EOF-sensitive update chunks.",
+    "- For Add File sections, only lines prefixed with + are file content.",
+    "- Prefer one coherent apply_patch call when related edits belong together.",
     '- Use view_image for local image inspection; pass detail: "original" only when the current model supports it.',
     "- Prefer webresearch for external information gathering. Do not rely on any native web_search tool.",
     "- If the parallel tool is available, use it only for independent work.",
@@ -260,10 +252,14 @@ export default function codexCompatExtension(pi: ExtensionAPI) {
     name: "apply_patch",
     label: "Apply Patch",
     description:
-      "Apply a multi-file patch. The input field must contain the full patch text, including file add, update, delete, and optional move directives.",
+      "Apply a multi-file patch with Codex-compatible parsing and matching. Accepts raw patch bodies and explicit apply_patch/applypatch invocation forms.",
     promptSnippet: "Apply focused multi-file text patches",
     promptGuidelines: [
       "Use apply_patch for file edits, file creation, file deletion, and coordinated multi-file changes.",
+      "Input may be a raw patch body or an explicit apply_patch/applypatch command (including shell heredoc wrappers).",
+      "Patch bodies use *** Begin Patch / *** End Patch and Add/Update/Delete File sections.",
+      "In Add File sections, only + lines are treated as content.",
+      "Use *** End of File in update chunks when the match should be EOF-sensitive.",
       "When one task needs coordinated edits across multiple files, send them in a single apply_patch call when one coherent patch will do.",
       "Put the full patch text in the input field.",
       "Prefer one coherent patch over many tiny edits when the changes belong together.",
@@ -277,10 +273,15 @@ export default function codexCompatExtension(pi: ExtensionAPI) {
       return renderApplyPatchResult(result, options, theme);
     },
     async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
-      const summary = await applyPatch(ctx.cwd, params.input);
+      const parsedInput = await parseApplyPatchInvocation(ctx.cwd, params.input);
+      const summary = await applyPatch(parsedInput.effectiveCwd, parsedInput.patch);
       return {
         content: plainTextResult(formatApplyPatchContent(summary)),
-        details: summary,
+        details: {
+          ...summary,
+          invocationKind: parsedInput.kind,
+          effectiveCwd: parsedInput.effectiveCwd,
+        },
       };
     },
   });

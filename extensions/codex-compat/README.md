@@ -8,6 +8,14 @@ It does three things:
 - suppresses builtin `edit` and `write`, then provides `apply_patch` and `view_image` (when supported)
 - preserves custom repo tools (for example `webresearch` and `memory_recall`) and restores the prior tool set when you switch away from a supported model
 
+`apply_patch` now supports Codex-style behavior for parser and matcher semantics inside the current cwd guard, including:
+
+- `*** End of File` markers in update chunks
+- first update chunk omission of initial `@@`
+- pure-addition update chunks inserting at EOF
+- lenient matching passes (exact, trim-end, trim, Unicode punctuation/spacing normalization)
+- explicit invocation envelopes like `apply_patch <<'PATCH'` and `applypatch <<'PATCH'` (plus shell wrappers)
+
 ## How to use it
 
 Install/enable the extension, then select a supported Codex-family model.

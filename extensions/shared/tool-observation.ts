@@ -4,14 +4,64 @@ function normalizePathValue(pathValue: string): string | null {
 }
 
 function extractPatchText(input: unknown): string | null {
-  if (typeof input === "string") return input;
+  if (typeof input === "string") return maybeUnwrapApplyPatchInvocation(input);
   if (!input || typeof input !== "object" || Array.isArray(input)) return null;
 
   const record = input as Record<string, unknown>;
-  if (typeof record.input === "string") return record.input;
-  if (typeof record.patch === "string") return record.patch;
-  if (typeof record.text === "string") return record.text;
+  if (typeof record.input === "string") return maybeUnwrapApplyPatchInvocation(record.input);
+  if (typeof record.patch === "string") return maybeUnwrapApplyPatchInvocation(record.patch);
+  if (typeof record.text === "string") return maybeUnwrapApplyPatchInvocation(record.text);
   return null;
+}
+
+function unwrapQuoted(value: string): string | null {
+  const trimmed = value.trim();
+  if (trimmed.length < 2) return null;
+  const quote = trimmed[0];
+  if ((quote !== "'" && quote !== '"') || trimmed[trimmed.length - 1] !== quote) {
+    return null;
+  }
+
+  const inner = trimmed.slice(1, -1);
+  return quote === '"' ? inner.replace(/\\"/g, '"') : inner;
+}
+
+function unwrapShellEnvelope(input: string): string {
+  const trimmed = input.trim();
+  const wrappers: RegExp[] = [
+    /^(?:bash|zsh|sh)\s+-(?:lc|c)\s+([\s\S]+)$/,
+    /^(?:powershell|pwsh)\s+(?:-[^\s]+\s+)*-Command\s+([\s\S]+)$/i,
+    /^cmd\s+\/c\s+([\s\S]+)$/i,
+  ];
+
+  for (const wrapper of wrappers) {
+    const match = trimmed.match(wrapper);
+    if (!match) continue;
+    const unwrapped = unwrapQuoted(match[1] ?? "");
+    return unwrapped ?? trimmed;
+  }
+
+  return trimmed;
+}
+
+function maybeUnwrapApplyPatchInvocation(input: string): string | null {
+  const trimmed = input.trim();
+  if (trimmed.startsWith("*** Begin Patch")) return trimmed;
+
+  const shellBody = unwrapShellEnvelope(trimmed);
+  const commandMatch = shellBody.match(
+    /^(?:cd\s+.+?\s+&&\s+)?(?:apply_patch|applypatch)\b([\s\S]*)$/,
+  );
+  if (!commandMatch) return null;
+
+  const rest = (commandMatch[1] ?? "").trimStart();
+  if (rest.startsWith("*** Begin Patch")) return rest;
+
+  const heredocMatch = rest.match(/^<<\s*(['"]?)([A-Za-z_][A-Za-z0-9_]*)\1\s*\n([\s\S]*?)\n\2\s*$/);
+  if (!heredocMatch) return null;
+
+  const patch = heredocMatch[3]?.trim();
+  return patch && patch.startsWith("*** Begin Patch") ? patch : null;
 }
 
 function collectPatchMutatedPaths(patchText: string): string[] {
