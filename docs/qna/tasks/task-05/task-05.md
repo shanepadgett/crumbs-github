@@ -26,7 +26,7 @@ This is one committable and testable unit because it completes the user-facing `
 - The agent-facing `qna` tool shall remain distinct from the low-level shared question-runtime request tool and shall use that runtime only when structured forms are needed.
 - While the agent-facing `qna` tool is active for `/qna`, the system shall still allow the agent to ask ordinary clarifying questions in chat when structured capture is unnecessary.
 - When the current `/qna` loop settles, the system shall deactivate the agent-facing `qna` tool.
-- When the current chat is attached to a Grill Me interview session, the system shall block `/qna` and direct the user back to Grill Me instead of mixing the two systems in one chat.
+- When the current chat is attached to an interview session, the system shall block `/qna` and direct the user back to the interview instead of mixing the two systems in one chat.
 - When a visible ordinary QnA question is left untouched on submit, the system shall keep that question `open` in the branch-local ledger.
 - When the form is submitted with no explicit outcomes in manual `/qna`, the system shall persist ledger state and notify the user without fabricating an agent response.
 - When the agent signals completion for the current `/qna` loop, the system shall be allowed to end that loop even if older open ordinary QnA items remain in the ledger.
@@ -38,7 +38,7 @@ This is one committable and testable unit because it completes the user-facing `
 
 - A user can run `/qna` as a scoped manual loop layered above the shared runtime, answer some questions, leave others open, and exit cleanly without losing unresolved backlog.
 - Empty `/qna` runs do not show dead-end UI and instead update the scan boundary and notify the user.
-- `/qna` refuses to run inside an attached Grill Me chat.
+- `/qna` refuses to run inside an attached interview chat.
 
 ## User test at exit
 

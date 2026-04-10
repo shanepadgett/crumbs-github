@@ -5,7 +5,7 @@
 - The system shall treat `/qna` as a simple current-branch question inbox.
 - The system shall treat `/qna` as opportunistic capture for the current chat branch rather than as a repo-scoped planning system.
 - The system shall provide `/qna-ledger` as the browsing and editing view for ordinary QnA items.
-- `/qna` and `/qna-ledger` shall not display or manage Grill Me interview sessions.
+- `/qna` and `/qna-ledger` shall not display or manage interview sessions.
 
 ## Entry and loop behavior
 
@@ -15,7 +15,7 @@
 - The agent-facing `qna` tool shall remain distinct from the low-level shared question-runtime request tool and shall use that runtime only when structured forms are needed.
 - While the agent-facing `qna` tool is active for `/qna`, the system shall still allow the agent to ask ordinary clarifying questions in chat when structured capture is unnecessary.
 - When the current `/qna` loop settles, the system shall deactivate the agent-facing `qna` tool.
-- When the current chat is attached to a Grill Me interview session, the system shall block `/qna` and direct the user back to Grill Me instead of mixing the two systems in one chat.
+- When the current chat is attached to an interview session, the system shall block `/qna` and direct the user back to the interview instead of mixing the two systems in one chat.
 
 ## Branch-local state
 

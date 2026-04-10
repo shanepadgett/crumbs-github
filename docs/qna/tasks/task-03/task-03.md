@@ -14,7 +14,7 @@ This is one committable and testable unit because it completes the runtime seman
 
 ## Parallelization
 
-- Completion of this task unblocks the `/qna` and `/grill-me` product tracks.
+- Completion of this task unblocks the `/qna` and `/interview` product tracks.
 
 ## Spec coverage
 

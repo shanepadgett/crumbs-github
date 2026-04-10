@@ -16,7 +16,7 @@ Everything here is specific to ordinary QnA state discovery and reconciliation w
 
 - This starts the `/qna` track.
 - Tasks 05-06 depend on this task.
-- The `/grill-me` track can proceed in parallel once Task 03 is complete.
+- The `/interview` track can proceed in parallel once Task 03 is complete.
 
 ## Spec coverage
 

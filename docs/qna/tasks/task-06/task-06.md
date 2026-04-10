@@ -6,7 +6,7 @@ Build the ordinary QnA ledger browser for the current branch. This task adds the
 
 ## Grouping methodology
 
-This is one committable and testable unit because it is the complete maintenance surface for ordinary QnA outside the live `/qna` loop. A user can browse, edit, send, and export ordinary questions without touching Grill Me or transcript extraction logic.
+This is one committable and testable unit because it is the complete maintenance surface for ordinary QnA outside the live `/qna` loop. A user can browse, edit, send, and export ordinary questions without touching Interview or transcript extraction logic.
 
 ## Dependencies
 
@@ -21,7 +21,7 @@ This is one committable and testable unit because it is the complete maintenance
 ### `docs/qna/qna-inbox-spec.md`
 
 - The system shall provide `/qna-ledger` as the browsing and editing view for ordinary QnA items.
-- `/qna` and `/qna-ledger` shall not display or manage Grill Me interview sessions.
+- `/qna` and `/qna-ledger` shall not display or manage interview sessions.
 - When the user runs `/qna-ledger`, the system shall open a simple ordinary-QnA ledger overlay for the current branch.
 - The `/qna-ledger` overlay shall prioritize browsing and filtering ordinary QnA questions rather than cross-session planning.
 - The `/qna-ledger` overlay shall allow filtering by question state.
