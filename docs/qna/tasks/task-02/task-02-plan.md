@@ -3,316 +3,312 @@
 - `Task File:` `docs/qna/tasks/task-02/task-02.md`
 - `Task Title:` `Task 02 — Shared question rendering, answer controls, and response-state model`
 - `Task Signature:` `task-02-shared-question-rendering-answer-controls-response-state-model`
-- `Primary Code Scope:` `extensions/question-runtime/types.ts`, `extensions/question-runtime/request-validator.ts`, `extensions/question-runtime/form-shell.ts`, `extensions/question-runtime/index.ts`, `extensions/question-runtime/tool.ts`
-- `Excluded Scope:` `external/`, `extensions/permissions/`, product-specific `/qna` and `/interview` workflow code, branch/session persistence work from tasks 03+ , and non-question-runtime repo areas unrelated to the shared form
+- `Primary Code Scope:` `extensions/question-runtime/types.ts`, `extensions/question-runtime/request-validator.ts`, `extensions/question-runtime/form-shell.ts`, `extensions/question-runtime/tool.ts`, `extensions/question-runtime/question-model.ts`, `extensions/question-runtime/form-state.ts`
+- `Excluded Scope:` `external/`, `extensions/permissions/`, product-specific `/qna` and `/interview` workflow code, request lifecycle files from task 01 (`extensions/question-runtime/index.ts`, `request-store.ts`, `request-watcher.ts`, `repair-messages.ts`, `request-paths.ts`), and all task-03+ graph/persistence/submission work
 
 ### 2. Executive Summary
 
-This task should turn the current read-only question-runtime shell into the full shared static-question form. The runtime must accept richer authored question data, render all three supported question kinds with recommendations and justification, let users edit answers and notes, support `answered` / `open` / `skipped` / `needs_clarification`, and block final submit when `Other` text or clarification notes are missing.
+This task should upgrade the current read-only question-runtime shell into the full shared static-question form for a single authored payload. The form must render all three question kinds, show justification and recommendation data in the right places, support reserved option behavior for `yes` / `no` / `other`, allow notes and `Other` text editing, and expose the user-facing response-state model `open` / `answered` / `skipped` / `needs_clarification` without introducing product-specific workflow or graph logic.
 
-The cleanest path is to keep the existing request/watch/retry pipeline intact and add two new pure layers underneath the UI: one module that derives reusable choice-question models (`yes_no` and `multiple_choice` share most row rendering rules), and one module that owns the per-question draft/state machine plus submit validation. `form-shell.ts` should become a thin interactive renderer over those pure helpers, and it should return a structured local form result that task 03 can later consume for graph-aware submission.
+The cleanest architecture is to keep the task-01 request pipeline unchanged and add two pure reusable layers under the TUI: one layer to derive renderable question/choice models from the authored schema, and one layer to manage editable drafts, computed response states, submit blockers, and sanitized per-question outcomes. `form-shell.ts` should keep only shell-local UI state such as active tab, row focus, and context expansion, then call the pure helpers to avoid duplicating logic that task 03 will need again.
 
 ### 3. Requirement Map
 
 1. **Requirement:** `The system shall support exactly three question kinds: yes_no, multiple_choice, and freeform.`
    - **Status:** `already satisfied`
    - **Current:** `extensions/question-runtime/types.ts` defines `QuestionKind`; `extensions/question-runtime/request-validator.ts` restricts `kind` to those three values in `validateQuestionNode()`.
-   - **Planned implementation move:** Preserve the existing enum and layer richer rendering/state handling on top of it rather than adding new kinds.
+   - **Planned implementation move:** Preserve the existing enum and extend schema/rendering/state around it.
 
 2. **Requirement:** `Each question shall expose a short primary prompt.`
    - **Status:** `already satisfied`
-   - **Current:** `AuthorizedQuestionBase.prompt` is required; `validateRequiredString(..., "prompt", ...)` enforces it; `form-shell.ts` already renders `question.prompt`.
-   - **Planned implementation move:** Keep `prompt` as the primary headline in the active question view and review tab summaries.
+   - **Current:** `AuthorizedQuestionBase.prompt` is required and rendered in `form-shell.ts`.
+   - **Planned implementation move:** Keep `prompt` as the primary headline in every active question tab and in review-tab summaries.
 
 3. **Requirement:** `Each question may expose an optional context block.`
    - **Status:** `needs implementation`
-   - **Current:** No `context` field exists in `types.ts`, validator ignores it, and `form-shell.ts` has no collapsed/expanded context UI.
-   - **Planned implementation move:** Add `context?: string` to authored question types, validate it as a non-empty string when present, and add per-question collapsed UI state with an explicit reveal toggle.
+   - **Current:** No `context` field exists in the schema or UI.
+   - **Planned implementation move:** Add `context?: string`, validate it as a non-empty string when present, and keep expansion state shell-local in `form-shell.ts` so reusable draft state stays UI-agnostic.
 
 4. **Requirement:** `When a question can be reduced to a true yes or no decision, the system shall prefer yes_no.`
    - **Status:** `partially satisfied`
-   - **Current:** The runtime supports `yes_no`, but nothing can deterministically infer author intent from freeform prose.
-   - **Planned implementation move:** Treat this as caller-authoring guidance, not a runtime rejection rule; reinforce it through the updated request template and validator hints, but do not invent heuristic enforcement.
+   - **Current:** The runtime supports `yes_no`, but cannot deterministically infer author intent.
+   - **Planned implementation move:** Treat this as caller-authoring guidance only; no runtime heuristic or rejection rule.
 
 5. **Requirement:** `When a question can be reduced to a finite set of options, the system shall prefer multiple_choice.`
    - **Status:** `partially satisfied`
-   - **Current:** `multiple_choice` is supported, but the runtime cannot reliably infer reducibility.
-   - **Planned implementation move:** Keep this as authoring guidance and reflect it in the richer template/examples rather than adding non-deterministic validation.
+   - **Current:** The runtime supports `multiple_choice`, but cannot deterministically infer reducibility.
+   - **Planned implementation move:** Treat this as caller-authoring guidance only; no runtime heuristic or rejection rule.
 
 6. **Requirement:** `When a question cannot be reduced to yes_no or multiple_choice without losing essential nuance, the system shall use freeform.`
    - **Status:** `partially satisfied`
-   - **Current:** `freeform` exists, but the runtime cannot prove when nuance requires it.
-   - **Planned implementation move:** Preserve `freeform` support and document this as a caller-owned choice, not a validator inference.
+   - **Current:** The runtime supports `freeform`, but cannot deterministically infer when nuance requires it.
+   - **Planned implementation move:** Treat this as caller-authoring guidance only; no runtime heuristic or rejection rule.
 
 7. **Requirement:** `Every surfaced question shall include recommendation data.`
    - **Status:** `needs implementation`
-   - **Current:** No recommendation fields exist in `types.ts`; validator and UI know nothing about recommendations.
-   - **Planned implementation move:** Add kind-specific recommendation fields to the request schema and render them by default in the active question UI.
+   - **Current:** No recommendation fields exist in `types.ts` or `request-validator.ts`.
+   - **Planned implementation move:** Lock the authored schema per kind:
+     - `yes_no` -> `recommendedOptionId: "yes" | "no"`
+     - `multiple_choice` -> `recommendedOptionIds: string[]`
+     - `freeform` -> `suggestedAnswer: string` satisfies the recommendation requirement for this kind.
 
 8. **Requirement:** `Every surfaced question shall include a justification.`
    - **Status:** `needs implementation`
-   - **Current:** No `justification` field exists in the authored schema or form UI.
-   - **Planned implementation move:** Add required `justification: string` to the shared authored question base, validate it, and render it under the prompt for every question.
+   - **Current:** No `justification` field exists.
+   - **Planned implementation move:** Add required `justification: string` to the shared authored base and render it by default on every question tab.
 
 9. **Requirement:** `When the question kind is freeform, the system shall require a separate suggestedAnswer field in addition to the justification.`
    - **Status:** `needs implementation`
    - **Current:** `AuthorizedFreeformQuestion` contains only `kind: "freeform"`.
-   - **Planned implementation move:** Extend `AuthorizedFreeformQuestion` with `suggestedAnswer: string` and enforce it in `request-validator.ts`.
+   - **Planned implementation move:** Add `suggestedAnswer: string` to `AuthorizedFreeformQuestion` and require it in the validator.
 
 10. **Requirement:** `When the question kind is freeform, the system shall render the suggested answer as a read-only block separate from user input.`
     - **Status:** `needs implementation`
-    - **Current:** `form-shell.ts` has no freeform-specific renderer beyond the prompt/kind line.
-    - **Planned implementation move:** Add a dedicated read-only “Suggested answer” section above a separate editable user-answer field.
+    - **Current:** `form-shell.ts` has no freeform-specific body.
+    - **Planned implementation move:** Render a read-only `Suggested answer` section above a separate editable `Answer` field and optional answer-level `note` field.
 
 11. **Requirement:** `When the question kind is multiple_choice, the system shall render recommended options inline on option rows.`
     - **Status:** `needs implementation`
-    - **Current:** `renderMultipleChoiceLines()` prints only `optionId` and `label`.
-    - **Planned implementation move:** Build derived choice-row view models with `recommended: boolean` and render row-level recommendation badges.
+    - **Current:** `renderMultipleChoiceLines()` renders only raw labels.
+    - **Planned implementation move:** Derive shared choice rows with `recommended: boolean` and render recommendation badges inline on those rows only.
 
 12. **Requirement:** `When the question kind is yes_no, the system shall render the recommended side inline on the yes or no choice.`
     - **Status:** `needs implementation`
-    - **Current:** `yes_no` questions have no rendered option rows at all.
-    - **Planned implementation move:** Synthesize shared yes/no rows using reserved IDs and render the recommended side inline exactly like a single-select choice question.
+    - **Current:** `yes_no` questions render no option rows.
+    - **Planned implementation move:** Materialize `yes` and `no` as synthetic choice rows and mark the recommended side inline.
 
 13. **Requirement:** `Every multiple_choice question shall declare selectionMode: single | multi explicitly.`
     - **Status:** `already satisfied`
-    - **Current:** `AuthorizedMultipleChoiceQuestion.selectionMode` exists and `request-validator.ts` enforces it.
-    - **Planned implementation move:** Preserve the field and drive both row toggling logic and recommendation cardinality rules from it.
+    - **Current:** `AuthorizedMultipleChoiceQuestion.selectionMode` exists and is validated.
+    - **Planned implementation move:** Preserve it and drive selection toggling plus recommendation cardinality from it.
 
 14. **Requirement:** `The shared runtime shall reserve option IDs yes, no, and other.`
     - **Status:** `needs implementation`
-    - **Current:** Reserved IDs are not declared anywhere and authored `multiple_choice` options may currently use any string.
-    - **Planned implementation move:** Export shared reserved-ID constants from `types.ts`, reject those IDs in authored multiple-choice options, and use them in runtime-derived rows and answer drafts.
+    - **Current:** Reserved IDs are not declared or enforced.
+    - **Planned implementation move:** Export reserved-ID constants from `types.ts` and use them in validator, choice-model derivation, and answer drafts.
 
 15. **Requirement:** `Every multiple_choice question shall append an Other option automatically using optionId: other.`
     - **Status:** `needs implementation`
-    - **Current:** `form-shell.ts` renders only authored `question.options`.
-    - **Planned implementation move:** Add a shared helper that derives renderable choice rows and always appends a synthetic `Other` row with `optionId: "other"`.
+    - **Current:** `form-shell.ts` renders authored options only.
+    - **Planned implementation move:** `question-model.ts` will append one synthetic `Other` row last for every multiple-choice question.
 
 16. **Requirement:** `Agent-authored multiple_choice options shall not redundantly include the automatic Other option.`
     - **Status:** `needs implementation`
-    - **Current:** Validator allows authored `optionId: "other"`.
-    - **Planned implementation move:** Reject authored `multiple_choice` options that use reserved IDs, especially `other`, with deterministic validator issues.
+    - **Current:** Validator allows authored `optionId: "other"` today.
+    - **Planned implementation move:** Reject authored multiple-choice options that use any reserved option ID: `yes`, `no`, or `other`.
 
 17. **Requirement:** `Every yes_no question shall model yes and no using the reserved option IDs yes and no.`
-    - **Status:** `partially satisfied`
-    - **Current:** `yes_no` is a distinct kind, but there is no shared option-row model or answer-state shape using `yes` / `no`.
-    - **Planned implementation move:** Introduce a shared derived choice model that always materializes `yes` and `no` rows and stores the selected answer as those exact IDs.
+    - **Status:** `needs implementation`
+    - **Current:** `yes_no` is a distinct kind but has no explicit row model or answer shape using those IDs.
+    - **Planned implementation move:** Store yes/no selection drafts and answered outcomes using exact option IDs `yes` and `no`.
 
 18. **Requirement:** `A multiple_choice option may include optional description or subtext.`
     - **Status:** `needs implementation`
     - **Current:** `AuthorizedMultipleChoiceOption` contains only `optionId` and `label`.
-    - **Planned implementation move:** Add an optional secondary-text field on choice options and render it as muted subtext under the main label.
+    - **Planned implementation move:** Standardize on one optional field `description?: string` for task 02, validate it when present, and render it as muted subtext under the main option label.
 
 19. **Requirement:** `When selectionMode is multi, the system shall allow the agent to recommend more than one option.`
     - **Status:** `needs implementation`
     - **Current:** No multiple-choice recommendation field exists.
-    - **Planned implementation move:** Add `recommendedOptionIds: string[]` for multiple-choice questions and validate one-or-more IDs for `multi` questions.
+    - **Planned implementation move:** Add `recommendedOptionIds: string[]` with validator rules:
+      - `single` => exactly one recommended authored option ID
+      - `multi` => one or more recommended authored option IDs.
 
 20. **Requirement:** `The system shall not impose an artificial cap on the number of agent-provided multiple_choice options.`
     - **Status:** `already satisfied`
-    - **Current:** Validator accepts arbitrary option-array lengths and no UI code slices the array.
-    - **Planned implementation move:** Preserve the unbounded array model and avoid introducing pagination or hard row limits in the derived choice helper.
+    - **Current:** No option-count cap exists in validator or UI.
+    - **Planned implementation move:** Preserve unbounded authored options and do not introduce row count limits or pagination.
 
 21. **Requirement:** `When the user selects Other, the form shall require non-empty otherText before submit.`
     - **Status:** `needs implementation`
-    - **Current:** No `Other` row, no `otherText`, and no submit validation exist.
-    - **Planned implementation move:** Store `otherText` separately in the multiple-choice answer draft and add submit validation that blocks final submit when `other` is selected but `otherText.trim()` is empty.
+    - **Current:** No `Other` row or `otherText` draft exists.
+    - **Planned implementation move:** Add `otherText` to the editable multiple-choice draft and block final submit when `other` is selected but `otherText.trim()` is empty.
 
 22. **Requirement:** `When the user selects Other, the payload shall send optionId: other plus separate otherText.`
     - **Status:** `needs implementation`
-    - **Current:** No form result or answer payload shape exists.
-    - **Planned implementation move:** Define a structured `QuestionRuntimeFormResult`/draft shape now so selected option IDs include `other` and `otherText` remains a sibling field for later task-03 payload construction.
+    - **Current:** No sanitized result type exists.
+    - **Planned implementation move:** Split editable drafts from sanitized per-question outcomes so answered multiple-choice outcomes can include a selected `optionId: "other"` plus sibling `otherText`.
 
 23. **Requirement:** `When the question is multi-select, the system shall allow Other alongside normal selected options.`
     - **Status:** `needs implementation`
-    - **Current:** No interactive multiple-choice selection exists.
-    - **Planned implementation move:** In the shared form-state helper, treat `other` like any other selectable option for `multi`, while still requiring separate `otherText`.
+    - **Current:** No interactive multi-select renderer exists.
+    - **Planned implementation move:** Treat `other` like any other selectable row in `multi` mode while preserving separate `otherText` validation.
 
 24. **Requirement:** `When the user selects Other, the system shall not allow a separate note on that option.`
     - **Status:** `needs implementation`
-    - **Current:** There is no note system and no special-case handling for `other`.
-    - **Planned implementation move:** Mark the synthetic `Other` row as `noteAllowed: false` and have the form-state/result builder ignore any unexpected note draft for that row.
+    - **Current:** No option-note system exists.
+    - **Planned implementation move:** Mark the synthetic `Other` row as `noteAllowed: false` and ignore any accidental note draft for that row in outcome building.
 
 25. **Requirement:** `The UI may allow note entry on any option row for ease of use.`
     - **Status:** `needs implementation`
-    - **Current:** No option-level notes exist.
-    - **Planned implementation move:** Allow note editing on every non-`other` option row regardless of selection, but store those as drafts and sanitize to selected options only when building the answered result.
+    - **Current:** No option-note UI exists.
+    - **Planned implementation move:** Allow note drafts on every non-`other` option row even when not currently selected.
 
 26. **Requirement:** `When a multiple_choice answer is submitted, the payload shall include notes only for selected options.`
     - **Status:** `needs implementation`
-    - **Current:** There is no answered result builder.
-    - **Planned implementation move:** Add a pure sanitizer in `form-state.ts` that filters `optionNoteDrafts` down to selected option IDs when building the structured form result.
+    - **Current:** No sanitized outcome builder exists.
+    - **Planned implementation move:** Sanitize option-note drafts into answered outcomes by filtering to selected option IDs only.
 
 27. **Requirement:** `The system shall support per-question response states answered, needs_clarification, skipped, and open.`
     - **Status:** `needs implementation`
-    - **Current:** `types.ts` defines no user-response state model; `form-shell.ts` is read-only.
-    - **Planned implementation move:** Export `QuestionResponseState`, initialize every question as `open`, and add explicit transitions for `answered`, `needs_clarification`, `skipped`, and `reopen` in a pure form-state module.
+    - **Current:** No response-state model exists.
+    - **Planned implementation move:** Use a split model:
+      - editable draft stores `closureState: "open" | "skipped" | "needs_clarification"`
+      - pure helper computes current public response state as:
+        - `skipped` if `closureState === "skipped"`
+        - `needs_clarification` if `closureState === "needs_clarification"`
+        - `answered` if `closureState === "open"` and the answer draft is complete
+        - otherwise `open`.
 
 28. **Requirement:** `The system shall use the term note for all user-authored supplemental text.`
     - **Status:** `needs implementation`
-    - **Current:** The question-runtime UI has no supplemental-text labels.
-    - **Planned implementation move:** Standardize all UI labels and state fields on `note`, including answer-level notes and question-level notes.
+    - **Current:** The shell has no supplemental-text terminology.
+    - **Planned implementation move:** Use `note` consistently in field names, labels, and sanitized outcome types.
 
 29. **Requirement:** `When a question is answered as multiple_choice, the system shall store notes per selected option.`
     - **Status:** `needs implementation`
-    - **Current:** No answer-state storage exists.
-    - **Planned implementation move:** Use per-option note drafts in local form state and sanitize them to selected option notes in the structured answered result.
+    - **Current:** No note storage exists.
+    - **Planned implementation move:** Keep per-option note drafts in editable state and emit only selected-option notes in answered outcomes.
 
 30. **Requirement:** `When a question is answered as yes_no or freeform, the system shall store one answer-level note.`
     - **Status:** `needs implementation`
     - **Current:** No answer-level note fields exist.
-    - **Planned implementation move:** Add one `note` field inside yes/no and freeform answer drafts and render/edit it separately from question-level notes.
+    - **Planned implementation move:** Add a single answer-level `note` field to yes/no and freeform editable drafts and answered outcomes.
 
 31. **Requirement:** `When a question is marked needs_clarification, the system shall store one question-level note.`
     - **Status:** `needs implementation`
     - **Current:** No question-level note field exists.
-    - **Planned implementation move:** Add `questionNote` to each question draft record and use it as the current note when `responseState === "needs_clarification"`.
+    - **Planned implementation move:** Add `questionNote` to editable drafts and use it as the required note for `needs_clarification` outcomes.
 
 32. **Requirement:** `When a question is marked skipped, the system shall store one optional question-level note.`
     - **Status:** `needs implementation`
-    - **Current:** No skip note exists.
-    - **Planned implementation move:** Reuse the same `questionNote` field for `skipped`, without making it a submit blocker.
+    - **Current:** No skipped-note field exists.
+    - **Planned implementation move:** Reuse `questionNote` for `skipped` with no submit requirement.
 
 33. **Requirement:** `When the user marks a question needs_clarification, the system shall require a note before allowing final submit.`
     - **Status:** `needs implementation`
-    - **Current:** There is no final submit path or clarification validation.
-    - **Planned implementation move:** Add form-level submit validation that blocks only when a `needs_clarification` question has an empty trimmed `questionNote`.
+    - **Current:** No final-submit validation exists.
+    - **Planned implementation move:** Add pure submit validation that blocks only when a `needs_clarification` question has an empty trimmed `questionNote`.
 
 34. **Requirement:** `When the user marks a question needs_clarification, the system shall treat that state as mutually exclusive with any answered state.`
     - **Status:** `needs implementation`
-    - **Current:** No response-state transitions exist.
-    - **Planned implementation move:** Make `responseState` singular and explicit; marking `needs_clarification` changes the current state without deleting the underlying answer draft.
+    - **Current:** No state-transition semantics exist.
+    - **Planned implementation move:** Use singular `closureState`; when it becomes `needs_clarification`, the computed public state becomes `needs_clarification` even if the preserved answer draft is complete.
 
 35. **Requirement:** `When the user marks a question needs_clarification, the system shall dim and lock answer controls while preserving prior drafts underneath.`
     - **Status:** `needs implementation`
-    - **Current:** No answer controls or draft model exist.
-    - **Planned implementation move:** Render choice/freeform controls in dim styling, ignore answer-edit inputs while closed, and keep the answer draft object untouched in state.
+    - **Current:** No answer controls or closure behavior exist.
+    - **Planned implementation move:** While `closureState === "needs_clarification"`, lock all answer controls, keep the question-level `note` editor and `Reopen` action enabled, and preserve answer drafts unchanged.
 
 36. **Requirement:** `When the user marks a question skipped, the system shall dim and lock answer controls while preserving prior drafts underneath.`
     - **Status:** `needs implementation`
     - **Current:** Same gap as above.
-    - **Planned implementation move:** Apply the same closed-state rendering/locking rule for `skipped` while preserving the answer draft object.
+    - **Planned implementation move:** Apply the same closed-state rendering/locking behavior for `skipped`, with optional question note and enabled `Reopen`.
 
 37. **Requirement:** `When the user skips a question, the system shall treat that question as closed until it is explicitly reopened.`
     - **Status:** `needs implementation`
-    - **Current:** No reopen behavior exists.
-    - **Planned implementation move:** Add an explicit `reopenQuestion()` transition and make all answer-edit actions no-op while `responseState` is `skipped` or `needs_clarification`.
+    - **Current:** No reopen flow exists.
+    - **Planned implementation move:** Closed-state controls expose `Reopen`; all answer-edit actions are no-ops until that action returns `closureState` to `open`.
 
 38. **Requirement:** `When a user reopens a previously skipped or needs_clarification question and submits a normal answer, that latest answer shall become the question's current state.`
     - **Status:** `needs implementation`
-    - **Current:** No reopen or answer-commit path exists.
-    - **Planned implementation move:** Reopening returns the question to `open`; a later explicit “mark answered” action or valid final submit can promote the preserved/latest answer draft back to `answered`.
+    - **Current:** No reopen semantics exist.
+    - **Planned implementation move:** `Reopen` changes only `closureState` back to `open`; if the preserved or newly edited answer draft is complete, the computed public state becomes `answered` again on the next render and in the built outcomes.
 
 39. **Requirement:** `The system shall show prompt, recommendation, and justification by default for the active question.`
-    - **Status:** `partially satisfied`
-    - **Current:** `form-shell.ts` shows `prompt` only; recommendation and justification fields do not exist.
-    - **Planned implementation move:** Always render prompt plus recommendation/justification panels in the active question tab, with inline recommendation markers for choice questions and a suggested-answer block for freeform.
+    - **Status:** `needs implementation`
+    - **Current:** The current shell shows only `prompt`.
+    - **Planned implementation move:** Render contract by kind:
+      - `yes_no` / `multiple_choice`: recommendation appears inline on visible option rows; justification appears as its own visible block.
+      - `freeform`: recommendation appears as the `Suggested answer` block; justification appears as its own visible block.
 
 40. **Requirement:** `When a question has context, the system shall keep that context collapsed by default and shall allow the user to reveal it on demand.`
     - **Status:** `needs implementation`
-    - **Current:** No context field or toggle state exists.
-    - **Planned implementation move:** Keep a per-question `contextExpanded` UI flag and render a collapsed summary row plus a toggle key/action.
+    - **Current:** No context UI exists.
+    - **Planned implementation move:** Default each tab’s context to collapsed shell-local UI state and expose a visible toggle row/action.
 
 41. **Requirement:** `When the user is viewing a multi-select question, the system shall allow multiple options to be selected at once.`
     - **Status:** `needs implementation`
-    - **Current:** No interactive multiple-choice renderer exists.
-    - **Planned implementation move:** Use the shared choice model plus `selectionMode`-aware toggling so `multi` retains multiple selected IDs while `single` replaces the prior selection.
+    - **Current:** No interactive choice renderer exists.
+    - **Planned implementation move:** `form-state.ts` will keep a selected-option set for `multi` and replace-selection behavior for `single`.
 
 ### 4. Current Architecture Deep Dive
 
-#### Relevant files and current roles
+#### Relevant files and what role each one plays
 
 - `extensions/question-runtime/types.ts`
-  - Holds the minimal task-01 request model.
-  - Holds validation issue types and runtime request store snapshot types.
-  - Today it stops at `questionId`, `prompt`, `selectionMode`, and bare option labels.
+  - Defines the minimal task-01 authored request schema.
+  - Defines validation issue types and request-lifecycle store types.
+  - Stops at `prompt`, `selectionMode`, and bare multiple-choice labels.
 
 - `extensions/question-runtime/request-validator.ts`
-  - Parses JSON and validates only the fields the read-only shell currently needs.
-  - Enforces non-empty `questions`, required `questionId` / `kind` / `prompt`, `multiple_choice.selectionMode`, non-empty `options`, duplicate `questionId`, and duplicate `optionId`.
-  - Still ignores all task-02 presentation and response-state requirements.
+  - Validates only the fields the current read-only shell needs.
+  - Enforces required `questionId` / `kind` / `prompt`, `multiple_choice.selectionMode`, non-empty `options`, and duplicate IDs.
+  - Ignores all task-02 presentation and answer-entry requirements.
 
 - `extensions/question-runtime/form-shell.ts`
-  - Flattens authored inline questions in stable pre-order.
-  - Renders a tab strip and a read-only body with prompt, kind, path, and multiple-choice labels.
-  - Has no notion of answer drafts, row focus, notes, review/submit, or result return.
-
-- `extensions/question-runtime/index.ts`
-  - Orchestrates request watching, validation failures, retry prompts, and ready-shell launch.
-  - Locks the request before opening `showQuestionRuntimeFormShell(...)`.
-  - Assumes the form is modal/read-only and returns `Promise<void>`.
+  - Flattens authored inline questions in pre-order.
+  - Renders a tab strip and a read-only question body.
+  - Has no reusable state model, no focus model, no editor flow, and no result type.
 
 - `extensions/question-runtime/tool.ts`
-  - Registers `question_runtime_request`.
-  - Returns a minimal freeform template that is valid only under task-01 schema rules.
-  - Will become invalid once task-02 required fields land.
+  - Registers `question_runtime_request` and returns a minimal freeform template.
+  - That template becomes invalid as soon as task-02 required fields land.
+
+- `extensions/question-runtime/index.ts`
+  - Orchestrates task-01 request lifecycle and already calls `await showQuestionRuntimeFormShell(...)`.
+  - It does not need behavioral changes for task 02 if the shell starts returning a value that the caller ignores.
 
 #### Existing runtime flow
 
-1. `question_runtime_request` issues an authorized JSON path.
-2. `request-watcher.ts` notices edits on known files.
-3. `request-validator.ts` parses and validates the payload.
+1. `question_runtime_request` issues an authorized path.
+2. `request-watcher.ts` notices edits on known request files.
+3. `request-validator.ts` validates the current JSON.
 4. `index.ts` either sends hidden repair feedback or queues the request as ready.
 5. `index.ts` locks the request and opens `showQuestionRuntimeFormShell(...)`.
-6. The shell is currently view-only and closes on `Enter`, `Esc`, or `Ctrl+C`.
+6. The shell currently closes on `Enter`, `Esc`, or `Ctrl+C` with no form result.
 
 #### Current data/model shapes
 
-- `AuthorizedQuestionBase`
+- Authored request model today:
   - `questionId`
+  - `kind`
   - `prompt`
+  - `selectionMode`
+  - `options[{ optionId, label }]`
   - optional inline `followUps`
 
-- `AuthorizedYesNoQuestion`
-  - `kind: "yes_no"`
-
-- `AuthorizedFreeformQuestion`
-  - `kind: "freeform"`
-
-- `AuthorizedMultipleChoiceQuestion`
-  - `kind: "multiple_choice"`
-  - `selectionMode: "single" | "multi"`
-  - `options: { optionId, label }[]`
-
-- No current model exists for:
+- Missing model seams task 02 needs:
   - `context`
   - `justification`
-  - recommendation fields
+  - recommendation data by kind
   - freeform `suggestedAnswer`
-  - `Other`
-  - per-question answer drafts
-  - response states
-  - any structured form result
+  - reserved IDs and synthetic `Other`
+  - editable answer drafts
+  - computed response states
+  - sanitized per-question outcomes
 
 #### Current UI/rendering flow
 
-- Tabs are derived from pre-order flattening of the authored question tree.
-- The active tab renders:
-  - title
-  - request metadata
-  - tab strip
-  - prompt
-  - kind label
-  - path
-  - raw multiple-choice options if applicable
-- There is no submit/review surface, no validation loop inside the form, and no separation between durable runtime state and transient UI state.
+- Tabs are derived from pre-order flattening of the authored tree.
+- The active tab renders title, request metadata, tab strip, prompt, kind label, path, and raw multiple-choice options.
+- There is no row focus, no per-question state, no submit/review tab, and no shell-local UI state beyond the active tab index.
 
 #### Reusable pieces that should be preserved
 
-- `index.ts` request lifecycle, retry queue, and lock timing.
-- Stable pre-order flattening of inline authored questions.
-- Existing tab-oriented shell chrome from `form-shell.ts`.
-- `extensions/shared/option-picker.ts` as a read-only reference for the “custom TUI step -> open editor -> resume custom TUI” pattern.
-- `extensions/qna.ts` as a read-only reference for a review/submit tab and answer-status tab markers.
+- Task-01 request lifecycle in `extensions/question-runtime/index.ts`.
+- Stable pre-order flattening behavior, but moved into a reusable pure helper.
+- Existing tab-oriented shell chrome in `form-shell.ts`.
+- `extensions/shared/option-picker.ts` as a reference for the “custom TUI step -> open editor -> resume TUI” pattern.
+- `extensions/qna.ts` as a reference for a review/submit tab and answer-status tab markers.
 
 #### Friction, duplication, or missing seams
 
-- `form-shell.ts` currently mixes flattening and rendering and has no extracted state machine layer.
-- `yes_no` and `multiple_choice` need nearly the same row rendering rules, but there is no shared choice abstraction.
-- The request schema and validator cannot express the fields the UI now needs.
-- The runtime has no structured result object for later task-03 submission work.
-- The request tool template will fall out of sync as soon as new required fields land.
+- `form-shell.ts` currently mixes flattening and rendering and provides no reusable helper layer.
+- `yes_no` and `multiple_choice` need nearly the same row model, but no shared abstraction exists.
+- The current planless path would encourage a bad `draft === outcome` shortcut; task 02 needs those separated.
+- Context expansion is UI-only state and should not be mixed into reusable form-state.
+- The repo has no dedicated automated test harness for this area, so validation must be explicit about manual coverage and `mise run check`.
 
 ### 5. Target Architecture
 
@@ -320,67 +316,197 @@ The cleanest path is to keep the existing request/watch/retry pipeline intact an
 
 - `extensions/question-runtime/types.ts`
   - Shared authored request schema.
-  - Shared reserved-ID constants.
-  - Shared response-state and local form-result types.
-  - Existing runtime request-store types stay here too.
+  - Reserved option IDs.
+  - Editable draft types.
+  - Sanitized per-question outcome/result types.
+  - Existing task-01 request-lifecycle types remain here.
 
 - `extensions/question-runtime/question-model.ts` **(new)**
-  - Pure helpers that derive renderable question models from authored request data.
-  - Shared pre-order flattening.
-  - Shared choice-row construction for `yes_no` and `multiple_choice`, including synthetic `Other`.
+  - Pure helpers that flatten authored questions and derive renderable choice rows.
+  - Owns synthetic yes/no rows and the automatic `Other` row.
 
 - `extensions/question-runtime/request-validator.ts`
-  - Deterministic schema validation for task-02 question fields.
-  - Reserved-ID enforcement and recommendation/reference validation.
-  - Still no graph activation or submission-payload validation.
+  - Deterministic validation for the task-02 authored schema only.
+  - No draft validation, no active-graph validation, and no submission-payload validation.
 
 - `extensions/question-runtime/form-state.ts` **(new)**
-  - Pure per-question draft/state machine.
-  - Answer-draft editing helpers.
-  - `answered` / `open` / `skipped` / `needs_clarification` transitions.
-  - Submit blockers for missing clarification notes and missing `otherText`.
-  - Structured result builder for submit/cancel.
+  - Pure editable-draft state helpers.
+  - Computed response-state helpers.
+  - Submit blockers.
+  - Sanitized outcome builder.
 
 - `extensions/question-runtime/form-shell.ts`
-  - Interactive TUI renderer only.
-  - Question tab display, row focus, review tab, key handling, and editor-modal routing.
-  - No business rules beyond calling the pure helpers.
-
-- `extensions/question-runtime/index.ts`
-  - Orchestration only.
-  - Keeps retry and locking behavior unchanged.
-  - Accepts a structured form result from the shell and intentionally does nothing with it yet.
+  - TUI renderer and shell-local UI state only.
+  - Active tab, row focus, context expansion, editor routing, and review tab.
+  - Calls pure helpers for all business rules.
 
 - `extensions/question-runtime/tool.ts`
-  - Emits a schema-valid starter template under the new authored contract.
+  - Returns a schema-valid starter template under the richer authored contract.
 
-#### Data flow from command entry to final emitted result
+#### Authored schema contract to lock for task 02
 
-1. Agent calls `question_runtime_request`.
-2. Tool returns the authorized path plus a task-02-valid starter template.
-3. Watcher and validator approve a richer `AuthorizedQuestionRequest`.
-4. `index.ts` launches the interactive form.
-5. `question-model.ts` flattens questions and derives renderable choice rows.
-6. `form-state.ts` builds local draft state for every question.
-7. `form-shell.ts` lets the user edit drafts, mark states, reopen questions, and review submit blockers.
-8. On submit or cancel, `form-shell.ts` returns `QuestionRuntimeFormResult` to `index.ts`.
-9. Task 02 stops there; task 03 will consume that result to build graph-aware structured agent payloads.
+```ts
+type QuestionKind = "yes_no" | "multiple_choice" | "freeform";
 
-#### Reusable abstractions to introduce or strengthen
+interface AuthorizedQuestionBase {
+  questionId: string;
+  prompt: string;
+  context?: string;
+  justification: string;
+  followUps?: AuthorizedQuestionNode[];
+}
 
-- `RESERVED_OPTION_IDS` and reserved-ID helpers shared by validator, render model, and form-state code.
-- `buildChoiceQuestionModel(...)` so `yes_no` and `multiple_choice` share one rendering path.
-- `QuestionRuntimeQuestionDraft` / `QuestionAnswerDraft` so task 03 can reuse task-02 state without reverse-engineering UI internals.
-- `validateFormForSubmit(...)` and `buildQuestionRuntimeFormResult(...)` as pure functions reusable by future active-graph submission work.
+interface AuthorizedYesNoQuestion extends AuthorizedQuestionBase {
+  kind: "yes_no";
+  recommendedOptionId: "yes" | "no";
+}
 
-#### Clear boundaries between runtime, validation, storage, UI, and orchestration
+interface AuthorizedFreeformQuestion extends AuthorizedQuestionBase {
+  kind: "freeform";
+  suggestedAnswer: string;
+}
 
-- **Validation:** `request-validator.ts`
-- **Request/watch/storage lifecycle:** existing `request-store.ts`, `request-watcher.ts`, `repair-messages.ts`, `index.ts`
-- **Question-model derivation:** `question-model.ts`
-- **Per-question runtime state and submit rules:** `form-state.ts`
-- **UI rendering and input loop:** `form-shell.ts`
-- **Command/tool entry:** `tool.ts`
+interface AuthorizedMultipleChoiceOption {
+  optionId: string;
+  label: string;
+  description?: string;
+}
+
+interface AuthorizedMultipleChoiceQuestion extends AuthorizedQuestionBase {
+  kind: "multiple_choice";
+  selectionMode: "single" | "multi";
+  options: AuthorizedMultipleChoiceOption[];
+  recommendedOptionIds: string[];
+}
+```
+
+Rules locked by this plan:
+
+- `description` is the one secondary-text field name for task 02.
+- `freeform` recommendation data is exactly `suggestedAnswer`; no additional generic recommendation field.
+- `recommendedOptionIds` may reference authored options only and may not include synthetic `other`.
+- `single` multiple-choice requires exactly one recommended authored option ID.
+- `multi` multiple-choice requires one or more recommended authored option IDs.
+
+#### Editable draft model vs sanitized outcome model
+
+```ts
+type QuestionClosureState = "open" | "skipped" | "needs_clarification";
+type QuestionResponseState = "answered" | "needs_clarification" | "skipped" | "open";
+
+interface YesNoAnswerDraft {
+  kind: "yes_no";
+  selectedOptionId: "yes" | "no" | null;
+  note: string;
+}
+
+interface MultipleChoiceAnswerDraft {
+  kind: "multiple_choice";
+  selectedOptionIds: string[];
+  otherText: string;
+  optionNoteDrafts: Record<string, string>;
+}
+
+interface FreeformAnswerDraft {
+  kind: "freeform";
+  text: string;
+  note: string;
+}
+
+type QuestionAnswerDraft = YesNoAnswerDraft | MultipleChoiceAnswerDraft | FreeformAnswerDraft;
+
+interface QuestionRuntimeQuestionDraft {
+  questionId: string;
+  closureState: QuestionClosureState;
+  answerDraft: QuestionAnswerDraft;
+  questionNote: string;
+}
+
+type QuestionRuntimeQuestionOutcome =
+  | { questionId: string; state: "open" }
+  | { questionId: string; state: "skipped"; note?: string }
+  | { questionId: string; state: "needs_clarification"; note: string }
+  | {
+      questionId: string;
+      state: "answered";
+      answer:
+        | { kind: "yes_no"; optionId: "yes" | "no"; note?: string }
+        | {
+            kind: "multiple_choice";
+            selections: Array<{ optionId: string; note?: string }>;
+            otherText?: string;
+          }
+        | { kind: "freeform"; text: string; note?: string };
+    };
+
+interface QuestionRuntimeFormResult {
+  action: "submit" | "cancel";
+  draftSnapshot: QuestionRuntimeQuestionDraft[];
+  outcomes: QuestionRuntimeQuestionOutcome[];
+}
+```
+
+#### Response-state semantics and transition table
+
+Computed public state:
+
+```ts
+if (draft.closureState === "skipped") return "skipped";
+if (draft.closureState === "needs_clarification") return "needs_clarification";
+if (isAnswerDraftComplete(question, draft.answerDraft)) return "answered";
+return "open";
+```
+
+Transition rules:
+
+| User action | Editable draft change | Computed state after change |
+| --- | --- | --- |
+| Initial render | `closureState = "open"`, empty answer draft | `open` |
+| Edit answer while open | mutate `answerDraft` only | `open` until complete, then `answered` |
+| Edit answer note while open | mutate answer-level note only | unchanged computed state |
+| Select/deselect `Other` | mutate `selectedOptionIds` only, preserve `otherText` draft | `answered` only when all required answer parts are complete |
+| Mark `skipped` | `closureState = "skipped"`, preserve answer draft | `skipped` |
+| Mark `needs_clarification` | `closureState = "needs_clarification"`, preserve answer draft | `needs_clarification` |
+| Edit question note while closed | mutate `questionNote` only | remains closed |
+| Reopen | `closureState = "open"`, preserve `answerDraft` and `questionNote` | `answered` if preserved answer draft is complete, else `open` |
+
+Closed-state control rules:
+
+- `open`: answer controls, answer-note controls, `Skip`, and `Needs clarification` are enabled.
+- `skipped` / `needs_clarification`: answer controls are dimmed and disabled; question-level `note` editor and `Reopen` remain enabled.
+- Deselecting an option or `Other` does not clear its note/text draft; those drafts are preserved and sanitized only when outcomes are built.
+
+#### TUI interaction contract
+
+Question tabs:
+
+- `Tab` / `Shift+Tab` and `←` / `→` switch between question tabs and the final review tab.
+- `↑` / `↓` move focus within the active tab.
+- `Space` toggles the focused choice row for `yes_no` and `multiple_choice`.
+- `Enter` activates the focused row:
+  - choice row -> same behavior as `Space`
+  - `Context` row -> toggle collapsed/expanded
+  - `Answer`, `Other text`, or `note` row -> open `ctx.ui.editor(...)`
+  - `Skip`, `Needs clarification`, or `Reopen` row -> apply that state change
+  - review-tab blocker row -> jump to that question tab
+  - review-tab submit row -> attempt final submit
+- `Esc` / `Ctrl+C` close the form with `action: "cancel"` and return the current `draftSnapshot` plus computed outcomes.
+
+Review tab:
+
+- Shows counts by computed state.
+- Shows submit blockers from pure validation.
+- Exposes one focusable `Submit form` row.
+- Exposes one focusable row per blocker/question summary to jump back for repair.
+
+Rendering contract:
+
+- `yes_no` / `multiple_choice`: recommendation is shown inline on option rows only; do not duplicate it in a separate recommendation panel.
+- `freeform`: recommendation is shown as the `Suggested answer` block.
+- `justification` is always shown as its own visible block.
+- `context`, when present, is shown collapsed by default behind a visible toggle row.
+
+#### Data flow from command entry to final result
 
 ```text
 question_runtime_request
@@ -390,25 +516,20 @@ question_runtime_request
           |
           v
 AuthorizedQuestionRequest
-          |
-          +----------------------------+
-          |                            |
-          v                            v
- question-model.ts              form-state.ts
- (flatten + choice rows)        (drafts + transitions + submit rules)
-          |                            ^
-          +------------+---------------+
-                       |
-                       v
-                form-shell.ts
-          (tabs, editors, review, submit)
-                       |
-                       v
-          QuestionRuntimeFormResult
-                       |
-                       v
-                  index.ts
-        (no payload emission until task 03)
+      /           \
+     v             v
+question-model   form-state
+ (rows/order)   (drafts/outcomes)
+      \           /
+       v         v
+        form-shell.ts
+           |
+           v
+QuestionRuntimeFormResult
+           |
+           v
+  returned to existing launcher
+  with no task-02 persistence/emission
 ```
 
 ### 6. File-by-File Implementation Plan
@@ -417,17 +538,18 @@ AuthorizedQuestionRequest
 
 - `Path:` `extensions/question-runtime/types.ts`
   - `Action:` `modify`
-  - `Why:` Task-01 types stop before recommendation, justification, reserved IDs, and user response state.
+  - `Why:` Task-01 types stop before recommendation, justification, reserved IDs, editable drafts, and sanitized outcomes.
   - `Responsibilities:`
-    - Expand the authored request schema for task-02 fields.
-    - Export shared reserved option IDs.
-    - Export shared per-question draft/result types for the interactive form.
-    - Preserve existing request-store state types.
+    - Expand the authored request schema.
+    - Export reserved option IDs.
+    - Export editable draft types and sanitized outcome/result types.
+    - Preserve task-01 request-lifecycle types.
   - `Planned exports / signatures:`
 
     ```ts
     export const RESERVED_OPTION_IDS = ["yes", "no", "other"] as const;
     export type ReservedOptionId = (typeof RESERVED_OPTION_IDS)[number];
+    export type QuestionClosureState = "open" | "skipped" | "needs_clarification";
     export type QuestionResponseState = "answered" | "needs_clarification" | "skipped" | "open";
 
     export interface AuthorizedQuestionBase {
@@ -461,42 +583,35 @@ AuthorizedQuestionRequest
       recommendedOptionIds: string[];
     }
 
-    export type QuestionAnswerDraft =
-      | { kind: "yes_no"; selectedOptionId: "yes" | "no" | null; note: string }
-      | {
-          kind: "multiple_choice";
-          selectedOptionIds: string[];
-          otherText: string;
-          optionNoteDrafts: Record<string, string>;
-        }
-      | { kind: "freeform"; text: string; note: string };
-
     export interface QuestionRuntimeQuestionDraft {
       questionId: string;
-      responseState: QuestionResponseState;
+      closureState: QuestionClosureState;
       answerDraft: QuestionAnswerDraft;
       questionNote: string;
     }
 
+    export type QuestionRuntimeQuestionOutcome = ...;
+
     export interface QuestionRuntimeFormResult {
       action: "submit" | "cancel";
-      questions: QuestionRuntimeQuestionDraft[];
+      draftSnapshot: QuestionRuntimeQuestionDraft[];
+      outcomes: QuestionRuntimeQuestionOutcome[];
     }
     ```
 
   - `Key logic to add or change:`
-    - Extend `ValidationIssueCode` with generic value/reference issues needed for task-02 schema rules.
-    - Keep request-store snapshot types unchanged and colocated so task-01 infrastructure keeps compiling.
+    - Extend `ValidationIssueCode` with only the extra deterministic codes task 02 needs, such as `invalid_reference`, `reserved_identifier`, and `duplicate_array_value`.
+    - Keep request-store snapshot types untouched.
   - `Dependencies:` none
-  - `Risks / notes:` Do not let UI-only focus/scroll state leak into the shared durable draft/result types.
+  - `Risks / notes:` Do not let shell-only view state leak into these shared types.
 
 - `Path:` `extensions/question-runtime/question-model.ts`
   - `Action:` `add`
-  - `Why:` Reserved yes/no rows, synthetic `Other`, and static pre-order flattening should not live inside the TUI renderer.
+  - `Why:` Choice-row derivation and question flattening should not stay buried in the TUI renderer.
   - `Responsibilities:`
     - Flatten authored inline questions in stable pre-order.
-    - Convert `yes_no` and `multiple_choice` questions into one shared renderable choice model.
-    - Append the automatic `Other` row and mark recommendation/note availability per row.
+    - Build shared renderable choice rows for `yes_no` and `multiple_choice`.
+    - Append the automatic `Other` row last.
   - `Planned exports / signatures:`
 
     ```ts
@@ -530,20 +645,20 @@ AuthorizedQuestionRequest
     ```
 
   - `Key logic to add or change:`
-    - `yes_no` should always derive exactly two rows with `optionId: "yes"` and `optionId: "no"`.
-    - `multiple_choice` should append one synthetic `Other` row with `optionId: "other"` and `noteAllowed: false`.
-    - Recommendation flags should be precomputed here so the UI layer only renders them.
+    - `yes_no` always returns exactly two rows with `optionId: "yes"` and `optionId: "no"`.
+    - `multiple_choice` returns authored rows plus one synthetic `Other` row with `noteAllowed: false`.
+    - Recommendation flags are precomputed here so the shell only renders them.
   - `Dependencies:` `extensions/question-runtime/types.ts`
-  - `Risks / notes:` Keep this module static-question only; do not add task-03 active-graph logic here.
+  - `Risks / notes:` Keep this strictly static-question oriented; no task-03 graph activation logic.
 
 - `Path:` `extensions/question-runtime/request-validator.ts`
   - `Action:` `modify`
-  - `Why:` The validator must grow from task-01 minimal schema checks to full task-02 authored request requirements.
+  - `Why:` The validator must enforce the richer authored schema before the UI opens.
   - `Responsibilities:`
-    - Validate `context`, `justification`, recommendation fields, `suggestedAnswer`, and optional option descriptions.
+    - Validate `context`, `justification`, recommendation fields, `suggestedAnswer`, and `description`.
     - Reject reserved authored option IDs.
-    - Validate recommendation references against real option IDs.
-    - Preserve deterministic issue ordering and unknown-field tolerance.
+    - Validate recommendation references and cardinality.
+    - Keep unknown-field tolerance and deterministic issue ordering.
   - `Planned exports / signatures:`
 
     ```ts
@@ -551,31 +666,31 @@ AuthorizedQuestionRequest
     ```
 
   - `Key logic to add or change:`
-    - Require `justification` on every question.
-    - Require `recommendedOptionId` for `yes_no` and ensure it is `yes` or `no`.
-    - Require `suggestedAnswer` for `freeform`.
-    - Require non-empty `recommendedOptionIds` for `multiple_choice`, validate references, and reject duplicates/reserved references as needed.
-    - Reject authored `multiple_choice` options that use `yes`, `no`, or `other`.
-    - Validate optional `context` and option `description` as non-empty strings when present.
+    - Require `justification` for every question.
+    - Validate `context` and `description` as non-empty strings when present.
+    - `yes_no` requires `recommendedOptionId` and only accepts `yes` or `no`.
+    - `freeform` requires `suggestedAnswer`.
+    - `multiple_choice` requires `recommendedOptionIds` with exact cardinality rules from section 5.
+    - Reject authored `optionId` values `yes`, `no`, and `other`.
+    - Reject recommendation references to missing or synthetic options.
   - `Dependencies:` `extensions/question-runtime/types.ts`
   - `Risks / notes:`
     - Do not reject unknown extra fields.
-    - Keep parse error, top-level-object error, and duplicate-check ordering stable.
+    - Do not change task-01 parse/top-level-object error behavior.
 
 - `Path:` `extensions/question-runtime/form-state.ts`
   - `Action:` `add`
-  - `Why:` The current shell has no reusable per-question draft/state engine, and task-03 will need to build on the same state model.
+  - `Why:` The shell needs a pure draft/state/outcome layer that task 03 can later reuse.
   - `Responsibilities:`
-    - Initialize one draft record per flattened question.
-    - Store answer drafts separately from current `responseState`.
-    - Handle `answered`, `needs_clarification`, `skipped`, and `reopen` transitions.
-    - Validate submit blockers.
-    - Build a structured local form result for submit or cancel.
+    - Create initial editable drafts.
+    - Update answer drafts.
+    - Compute public response state.
+    - Validate final-submit blockers.
+    - Build sanitized per-question outcomes and the overall form result.
   - `Planned exports / signatures:`
 
     ```ts
     export type FormValidationIssueCode =
-      | "missing_answer"
       | "missing_other_text"
       | "missing_clarification_note";
 
@@ -588,12 +703,32 @@ AuthorizedQuestionRequest
     export interface QuestionRuntimeFormState {
       questions: Record<string, QuestionRuntimeQuestionDraft>;
       questionOrder: string[];
-      contextExpanded: Record<string, boolean>;
     }
 
     export function createQuestionRuntimeFormState(
       flattenedQuestions: FlattenedQuestion[],
     ): QuestionRuntimeFormState;
+
+    export function getQuestionDraft(
+      state: QuestionRuntimeFormState,
+      questionId: string,
+    ): QuestionRuntimeQuestionDraft;
+
+    export function isAnswerDraftComplete(
+      question: AuthorizedQuestionNode,
+      draft: QuestionRuntimeQuestionDraft,
+    ): boolean;
+
+    export function getQuestionResponseState(
+      question: AuthorizedQuestionNode,
+      draft: QuestionRuntimeQuestionDraft,
+    ): QuestionResponseState;
+
+    export function setClosureState(
+      state: QuestionRuntimeFormState,
+      questionId: string,
+      closureState: QuestionClosureState,
+    ): void;
 
     export function setYesNoSelection(
       state: QuestionRuntimeFormState,
@@ -639,30 +774,10 @@ AuthorizedQuestionRequest
       note: string,
     ): void;
 
-    export function markAnswered(
-      state: QuestionRuntimeFormState,
+    export function buildQuestionOutcome(
       question: AuthorizedQuestionNode,
-    ): FormValidationIssue | null;
-
-    export function markNeedsClarification(
-      state: QuestionRuntimeFormState,
-      questionId: string,
-    ): void;
-
-    export function markSkipped(
-      state: QuestionRuntimeFormState,
-      questionId: string,
-    ): void;
-
-    export function reopenQuestion(
-      state: QuestionRuntimeFormState,
-      questionId: string,
-    ): void;
-
-    export function toggleContextExpanded(
-      state: QuestionRuntimeFormState,
-      questionId: string,
-    ): void;
+      draft: QuestionRuntimeQuestionDraft,
+    ): QuestionRuntimeQuestionOutcome;
 
     export function validateFormForSubmit(
       flattenedQuestions: FlattenedQuestion[],
@@ -670,28 +785,28 @@ AuthorizedQuestionRequest
     ): FormValidationIssue[];
 
     export function buildQuestionRuntimeFormResult(
+      flattenedQuestions: FlattenedQuestion[],
       state: QuestionRuntimeFormState,
       action: "submit" | "cancel",
     ): QuestionRuntimeFormResult;
     ```
 
   - `Key logic to add or change:`
-    - Preserve answer drafts even when current state becomes `skipped` or `needs_clarification`.
-    - Make `questionNote` the closed-state note and answer-draft notes the answered-state notes.
-    - Filter multiple-choice note drafts down to selected options when building the result.
-    - Keep `open` valid at final submit unless some other blocker is triggered.
+    - Preserve `otherText`, deselected option notes, and closed-state `questionNote` drafts until sanitization time.
+    - `validateFormForSubmit()` blocks only on missing `otherText` for selected `other` and missing note for `needs_clarification`.
+    - `buildQuestionOutcome()` filters multiple-choice option notes down to selected options only.
   - `Dependencies:` `extensions/question-runtime/types.ts`, `extensions/question-runtime/question-model.ts`
-  - `Risks / notes:` Keep this pure and framework-agnostic so task-03 can reuse it for active-graph and draft-restoration work.
+  - `Risks / notes:` Keep this module pure; no UI focus, no tab state, no editor state.
 
 - `Path:` `extensions/question-runtime/form-shell.ts`
   - `Action:` `modify`
-  - `Why:` The existing file is only a shell; task 02 requires the full interactive static-question form.
+  - `Why:` Task 02 lives here: the current file is only a read-only shell.
   - `Responsibilities:`
-    - Render question tabs plus a final review/submit tab.
-    - Render prompt, recommendation, justification, optional context, and kind-specific answer controls.
-    - Route multiline editing through `ctx.ui.editor(...)` for freeform text, `Other` text, and notes.
-    - Respect closed-state locking/dimming.
-    - Return a structured `QuestionRuntimeFormResult`.
+    - Render question tabs plus one final review tab.
+    - Maintain shell-local UI state: active tab, focused row, and context expansion.
+    - Render kind-specific bodies using pure helpers.
+    - Route text/note editing through `ctx.ui.editor(...)`.
+    - Return a full `QuestionRuntimeFormResult` on submit or cancel.
   - `Planned exports / signatures:`
 
     ```ts
@@ -706,42 +821,24 @@ AuthorizedQuestionRequest
     ```
 
   - `Key logic to add or change:`
-    - Replace the inline `FlattenedQuestion`/`flattenQuestions()` implementation with helpers from `question-model.ts`.
-    - Add status markers to tabs so users can see `open` / `answered` / `skipped` / `needs_clarification` at a glance.
-    - Add one shared choice-question renderer for `yes_no` and `multiple_choice`.
-    - Add one freeform renderer with read-only suggested answer and editable answer/note affordances.
-    - Add a review tab that lists counts, blockers, and submit hints.
-    - Use a step-loop pattern like `option-picker.ts`: custom TUI step returns “edit field” intents, then the shell opens `ctx.ui.editor(...)`, updates state, and resumes the form.
-  - `Dependencies:` `extensions/question-runtime/types.ts`, `extensions/question-runtime/question-model.ts`, `extensions/question-runtime/form-state.ts`, `extensions/shared/option-picker.ts` and `extensions/qna.ts` as read-only implementation references only
+    - Replace inline flattening with `question-model.ts`.
+    - Add shell-local focus state keyed by question ID, not shared form-state.
+    - Add tab markers based on computed response state.
+    - Use one shared choice renderer for `yes_no` and `multiple_choice`.
+    - Use one freeform renderer with read-only `Suggested answer`, editable `Answer`, and answer-level `note`.
+    - In closed states, dim answer rows and leave only question-level `note` plus `Reopen` active.
+    - Add review-tab counts, blockers, jump-back rows, and a submit action.
+  - `Dependencies:` `extensions/question-runtime/types.ts`, `extensions/question-runtime/question-model.ts`, `extensions/question-runtime/form-state.ts`
   - `Risks / notes:`
-    - Do not rework request-launch orchestration here.
-    - Keep keyboard behavior simple and discoverable; avoid building a one-off control tree that task 03 would have to replace.
-
-- `Path:` `extensions/question-runtime/index.ts`
-  - `Action:` `modify`
-  - `Why:` The launcher must handle the form’s new non-void result contract without disturbing retry/lock behavior.
-  - `Responsibilities:`
-    - Keep request lifecycle orchestration unchanged.
-    - Accept the form result and intentionally no-op until task 03 consumes it.
-  - `Planned exports / signatures:`
-
-    ```ts
-    export default function questionRuntimeExtension(pi: ExtensionAPI): void;
-    ```
-
-  - `Key logic to add or change:`
-    - Capture the return value from `showQuestionRuntimeFormShell(...)`.
-    - Keep request locking before launch exactly where it is now.
-    - Avoid adding storage or payload emission logic in this task.
-  - `Dependencies:` `extensions/question-runtime/form-shell.ts`, `extensions/question-runtime/types.ts`
-  - `Risks / notes:` The retry queue, abort flow, and lock timing are task-01 behavior; do not regress them while threading the new result type.
+    - Keep recommendation rendering non-duplicated.
+    - Keep the keyboard model exactly as described in section 5.
 
 - `Path:` `extensions/question-runtime/tool.ts`
   - `Action:` `modify`
-  - `Why:` The starter template must remain valid after `justification` and recommendation fields become required.
+  - `Why:` The starter template must remain valid after the schema gets richer.
   - `Responsibilities:`
     - Keep request issuance unchanged.
-    - Return a template that passes the richer validator.
+    - Return a minimal valid task-02 template.
   - `Planned exports / signatures:`
 
     ```ts
@@ -753,35 +850,35 @@ AuthorizedQuestionRequest
     ```
 
   - `Key logic to add or change:`
-    - Update `buildTemplate()` so the returned JSON includes task-02-required fields.
-    - Keep the template minimal, likely a single valid freeform question with `justification` and `suggestedAnswer`.
+    - Update `buildTemplate()` to include `justification` and `suggestedAnswer` for a minimal valid freeform example.
   - `Dependencies:` `extensions/question-runtime/types.ts`
   - `Risks / notes:` Do not change request ID sequencing, path issuance, or tool response field names.
 
 #### 6.2 Read-only reference context
 
-- `extensions/qna.ts`
-  - Useful for tab-strip status markers and a review/submit page pattern.
+- `extensions/question-runtime/index.ts`
+  - Launch orchestration reference only; no task-02 behavior change planned.
 
 - `extensions/shared/option-picker.ts`
-  - Useful for the “custom TUI -> open editor -> resume custom TUI” note-edit loop.
+  - Reference for the editor-resume loop pattern.
 
-- `extensions/question-runtime/request-watcher.ts`
-  - Important flow context but no task-02 behavior change is needed.
+- `extensions/qna.ts`
+  - Reference for a review/submit tab and tab status markers.
 
-- `extensions/question-runtime/request-store.ts`
-  - Important request lifecycle context but no task-02 behavior change is needed.
+- `extensions/question-runtime/request-store.ts`, `request-watcher.ts`, `repair-messages.ts`
+  - Request-lifecycle context only.
 
-- `extensions/question-runtime/repair-messages.ts`
-  - Important validation-message context but the generic formatter should already handle new issue codes/messages.
+- `No automated test file additions planned in this task.`
+  - The repo has no dedicated runtime test harness for this area today.
+  - Validation is manual plus `mise run check` after the TypeScript edits.
 
 ### 7. File Fingerprints
 
 - `Path:` `extensions/question-runtime/types.ts`
-  - `Reason this file changes:` Add task-02 authored question fields, reserved option IDs, and shared response/result types.
+  - `Reason this file changes:` Add task-02 authored fields, reserved IDs, editable draft types, and sanitized outcome/result types.
   - `Existing anchors to search for:` `export type QuestionKind = "yes_no" | "multiple_choice" | "freeform";`, `export interface AuthorizedQuestionBase {`, `export interface AuthorizedMultipleChoiceOption {`, `export type ValidationIssueCode =`
-  - `New anchors expected after implementation:` `export const RESERVED_OPTION_IDS =`, `export type QuestionResponseState =`, `export interface QuestionRuntimeFormResult {`
-  - `Unsafe areas to avoid touching:` `QUESTION_RUNTIME_STATE_ENTRY`, `RuntimeRequestRecord`, and the request-store snapshot types unless a compile error forces a mechanical import/type update
+  - `New anchors expected after implementation:` `export const RESERVED_OPTION_IDS =`, `export type QuestionClosureState =`, `export type QuestionRuntimeQuestionOutcome =`, `export interface QuestionRuntimeFormResult {`
+  - `Unsafe areas to avoid touching:` `QUESTION_RUNTIME_STATE_ENTRY`, `RuntimeRequestRecord`, and request-store snapshot types
 
 - `Path:` `extensions/question-runtime/question-model.ts`
   - `Reason this file changes:` New pure helper layer for flattening and renderable choice rows.
@@ -790,132 +887,216 @@ AuthorizedQuestionRequest
   - `Unsafe areas to avoid touching:` none
 
 - `Path:` `extensions/question-runtime/request-validator.ts`
-  - `Reason this file changes:` Enforce task-02 schema fields, reserved IDs, and recommendation references.
+  - `Reason this file changes:` Enforce task-02 authored schema, reserved-ID rules, and recommendation references.
   - `Existing anchors to search for:` `const FORBIDDEN_PRODUCT_FIELDS = new Set([`, `function validateQuestionNode(`, `function appendDuplicateOptionIssues(`, `export function validateAuthorizedQuestionRequest(`
-  - `New anchors expected after implementation:` `function validateRecommendedOptionIds(`, `reserved_option_id`, `invalid_reference`
-  - `Unsafe areas to avoid touching:` parse-error handling at `$`, top-level object validation, unknown-field tolerance, and the existing forbidden product-field checks
+  - `New anchors expected after implementation:` `function validateRecommendedOptionId(`, `function validateRecommendedOptionIds(`, `invalid_reference`, `reserved_identifier`
+  - `Unsafe areas to avoid touching:` parse-error handling at `$`, top-level object validation, unknown-field tolerance, and existing forbidden product-field checks
 
 - `Path:` `extensions/question-runtime/form-state.ts`
-  - `Reason this file changes:` New pure form-state machine and submit-validation layer.
+  - `Reason this file changes:` New pure draft/state/outcome layer for the interactive form.
   - `Existing anchors to search for:` `none (new file)`
-  - `New anchors expected after implementation:` `export function createQuestionRuntimeFormState(`, `export function markAnswered(`, `export function validateFormForSubmit(`, `export function buildQuestionRuntimeFormResult(`
+  - `New anchors expected after implementation:` `export function isAnswerDraftComplete(`, `export function getQuestionResponseState(`, `export function buildQuestionOutcome(`, `export function buildQuestionRuntimeFormResult(`
   - `Unsafe areas to avoid touching:` none
 
 - `Path:` `extensions/question-runtime/form-shell.ts`
-  - `Reason this file changes:` Replace the read-only shell body with the full interactive question form.
+  - `Reason this file changes:` Replace the read-only shell body with the full interactive static-question form.
   - `Existing anchors to search for:` `interface FlattenedQuestion {`, `function flattenQuestions(`, `function renderMultipleChoiceLines(`, `export async function showQuestionRuntimeFormShell(`
-  - `New anchors expected after implementation:` `function renderReviewTab(`, `function renderChoiceQuestion(`, `Promise<QuestionRuntimeFormResult>`
-  - `Unsafe areas to avoid touching:` request metadata passed into the shell and the overall tab-oriented layout contract
-
-- `Path:` `extensions/question-runtime/index.ts`
-  - `Reason this file changes:` Thread the form result through the launcher without changing request orchestration behavior.
-  - `Existing anchors to search for:` `async function showReadyShell(item: ReadyQueueItem): Promise<void> {`, `await showQuestionRuntimeFormShell(ctxRef, {`
-  - `New anchors expected after implementation:` `const formResult = await showQuestionRuntimeFormShell(`
-  - `Unsafe areas to avoid touching:` retry prompt ordering, `store.lockRequest(...)`, and hidden repair-message delivery
+  - `New anchors expected after implementation:` `function renderReviewTab(`, `function renderChoiceQuestion(`, `function buildFocusableRows(`, `Promise<QuestionRuntimeFormResult>`
+  - `Unsafe areas to avoid touching:` request metadata display and the tab-oriented layout contract
 
 - `Path:` `extensions/question-runtime/tool.ts`
-  - `Reason this file changes:` Keep the emitted starter template valid under the new task-02 schema.
+  - `Reason this file changes:` Keep the emitted starter template valid under the richer task-02 schema.
   - `Existing anchors to search for:` `function buildTemplate(): Record<string, unknown> {`, `question_runtime_request`, `template,`
   - `New anchors expected after implementation:` `justification:`, `suggestedAnswer:`
   - `Unsafe areas to avoid touching:` request ID generation, path building, and the `details.requestId/path/projectRelativePath` response contract
 
 ### 8. Stepwise Execution Plan
 
-1. Expand `extensions/question-runtime/types.ts` with the richer authored question schema, reserved option IDs, and shared draft/result types.
-2. Add `extensions/question-runtime/question-model.ts` so flattening, yes/no rows, and automatic `Other` are not duplicated between the validator and UI.
-3. Update `extensions/question-runtime/request-validator.ts` to enforce the task-02 schema and reserved-ID rules.
-4. Add `extensions/question-runtime/form-state.ts` with initialization, transitions, submit validation, and result building.
-5. Replace the read-only logic in `extensions/question-runtime/form-shell.ts` with the interactive tab/review/editor loop wired to `question-model.ts` and `form-state.ts`.
-6. Update `extensions/question-runtime/tool.ts` so its starter template is valid again.
-7. Update `extensions/question-runtime/index.ts` to accept the form result without altering the surrounding retry/lock pipeline.
-8. Reload the extensions before any interactive verification because files under `extensions/question-runtime/` changed.
-9. Run a manual mixed-question fixture through the authorized-path flow and verify every task-02 interaction path.
-10. Run `mise run check` after all TypeScript edits.
+1. Expand `extensions/question-runtime/types.ts` with the locked task-02 authored schema, reserved IDs, draft types, and sanitized outcome/result types.
+2. Add `extensions/question-runtime/question-model.ts` for flattening and shared choice-row derivation.
+3. Update `extensions/question-runtime/request-validator.ts` to enforce the richer authored schema using the deterministic order in section 9.
+4. Add `extensions/question-runtime/form-state.ts` with draft initialization, computed-state helpers, submit blockers, and sanitized outcome building.
+5. Rewrite `extensions/question-runtime/form-shell.ts` to use `question-model.ts` and `form-state.ts`, following the exact keyboard/control model in section 5.
+6. Update `extensions/question-runtime/tool.ts` so the starter template stays valid.
+7. Reload the extension because files under `extensions/question-runtime/` changed.
+8. Run the mixed-question manual fixture from section 9 through the authorized-path flow.
+9. Run `mise run check` after all TypeScript edits.
 
-#### Parallelization notes
+Parallel notes:
 
-- Steps 1-2 should happen first because both validator and form-state depend on the new shared schema/constants.
-- Step 3 and step 4 are safe to do in parallel once step 1 is settled.
-- Step 6 can happen in parallel with step 5 after the schema contract is final.
-- Step 7 should happen after step 5 because the form function signature changes.
-- Steps 8-10 are sequential verification work.
+- Steps 1-2 should land first because validator and form-state depend on them.
+- Steps 3 and 4 can proceed in parallel once step 1 is fixed.
+- Step 6 can proceed in parallel with step 5 after the schema contract is fixed.
+- Steps 7-9 are sequential verification work.
 
-#### Checkpoints
+Checkpoints:
 
-- After step 3: validate that the request tool template still passes the richer validator.
-- After step 5: manually verify per-question interaction and submit blockers before touching launcher code.
-- After step 7: confirm a valid request still locks and opens exactly once.
+- After step 3: confirm the richer validator still accepts the updated starter template.
+- After step 5: confirm the shell can drive all question kinds and closed-state transitions before doing end-to-end request verification.
+- After step 8: confirm the task-01 launch/lock behavior still works without changing lifecycle files.
 
 ### 9. Validation Plan
 
-#### Unit-level verification for pure helpers
+#### Deterministic validator walk order
+
+Task-02 validator checks must run in this fixed order:
+
+1. Parse JSON text.
+2. Validate top-level object.
+3. Validate `questions` presence, type, and non-empty array.
+4. Walk questions in stable pre-order and validate fields in this order:
+   - forbidden product fields
+   - `questionId`
+   - `kind`
+   - `prompt`
+   - `context`
+   - `justification`
+   - kind-specific fields:
+     - `yes_no`: `recommendedOptionId`
+     - `freeform`: `suggestedAnswer`
+     - `multiple_choice`:
+       - `selectionMode`
+       - `options`
+       - each option `optionId`
+       - each option `label`
+       - each option `description`
+       - `recommendedOptionIds`
+   - `followUps`
+5. After the structural walk, run duplicate checks in discovery order:
+   - duplicate `questionId`
+   - duplicate authored `optionId` within each multiple-choice question
+   - duplicate values inside `recommendedOptionIds`
+6. After duplicate checks, run recommendation reference validation in question discovery order.
+
+#### Pure-helper verification
 
 - `request-validator.ts`
   - valid freeform question requires `justification` and `suggestedAnswer`
   - valid yes/no question requires `recommendedOptionId: "yes" | "no"`
-  - valid multiple-choice question requires `recommendedOptionIds`
-  - authored multiple-choice `optionId: "other"` is rejected
-  - recommended option IDs must refer to authored options
-  - optional `context` and option `description` reject empty strings when present
+  - valid single-select multiple-choice requires exactly one `recommendedOptionIds` entry
+  - valid multi-select multiple-choice allows more than one `recommendedOptionIds` entry
+  - authored multiple-choice `optionId: "yes" | "no" | "other"` is rejected
+  - `recommendedOptionIds` cannot reference missing options or synthetic `other`
+  - optional `context` and `description` reject empty strings when present
   - unknown extra fields still pass when known fields are valid
 
 - `form-state.ts`
-  - initial state is `open` for all questions
-  - `markNeedsClarification()` preserves answer drafts and changes only `responseState`
-  - `markSkipped()` preserves answer drafts and locks edits until `reopenQuestion()`
-  - multi-select supports multiple selected IDs including `other`
-  - submit validation blocks `other` without `otherText`
-  - submit validation blocks `needs_clarification` without a note
-  - multiple-choice answered results include notes only for selected option IDs
+  - initial computed state is `open` for all questions
+  - a complete open answer draft computes to `answered`
+  - `setClosureState(..., "skipped")` preserves answer drafts and computes `skipped`
+  - `setClosureState(..., "needs_clarification")` preserves answer drafts and computes `needs_clarification`
+  - reopening computes back to `answered` if the preserved draft is complete, else `open`
+  - `otherText` and deselected option-note drafts are preserved until sanitization
+  - submit validation blocks missing `otherText` for selected `other`
+  - submit validation blocks missing note for `needs_clarification`
+  - sanitized multiple-choice outcomes include notes only for selected options
 
-#### Integration/manual verification
+#### Mixed-question manual fixture
 
-Use one authorized request with at least:
+Use one authorized request with at least this shape:
 
-- one `yes_no` question with `recommendedOptionId: "yes"`
-- one single-select `multiple_choice` question with option descriptions and a recommendation
-- one multi-select `multiple_choice` question that uses `Other`
-- one `freeform` question with `suggestedAnswer`
-- at least one question with `context`
+```json
+{
+  "questions": [
+    {
+      "questionId": "q_confirm_repo",
+      "kind": "yes_no",
+      "prompt": "Should the runtime preserve answer drafts when a question is skipped?",
+      "justification": "Later reopening must restore earlier work.",
+      "recommendedOptionId": "yes",
+      "context": "Task 02 requires closed questions to preserve prior drafts underneath."
+    },
+    {
+      "questionId": "q_single_pick",
+      "kind": "multiple_choice",
+      "prompt": "Which note-editing interaction should the static form use?",
+      "justification": "The shell needs one consistent editor path for answer and note fields.",
+      "selectionMode": "single",
+      "recommendedOptionIds": ["editor_modal"],
+      "options": [
+        {
+          "optionId": "inline_input",
+          "label": "Inline input row",
+          "description": "Fast to type, but adds more in-shell cursor complexity."
+        },
+        {
+          "optionId": "editor_modal",
+          "label": "Open the editor modal",
+          "description": "Matches existing extension patterns for longer text."
+        }
+      ]
+    },
+    {
+      "questionId": "q_multi_pick",
+      "kind": "multiple_choice",
+      "prompt": "Which behaviors should the multi-select implementation preserve?",
+      "justification": "The form should preserve drafts and allow richer notes without forcing product-specific paths.",
+      "selectionMode": "multi",
+      "recommendedOptionIds": ["preserve_other_text", "preserve_option_notes"],
+      "options": [
+        {
+          "optionId": "preserve_other_text",
+          "label": "Preserve Other text after deselect",
+          "description": "Re-selecting Other should restore the prior draft."
+        },
+        {
+          "optionId": "preserve_option_notes",
+          "label": "Preserve deselected option notes",
+          "description": "Sanitize them out only when building outcomes."
+        }
+      ]
+    },
+    {
+      "questionId": "q_freeform",
+      "kind": "freeform",
+      "prompt": "Describe the cleanest split between draft state and submitted outcomes.",
+      "justification": "Task 03 will need reusable draft state without re-deriving payload semantics from UI internals.",
+      "suggestedAnswer": "Keep editable drafts separate from sanitized per-question outcomes and compute public response state from draft completeness plus explicit closed-state flags."
+    }
+  ]
+}
+```
 
-Manual checks:
+#### Manual verification checklist
 
-1. Open the request and confirm the form still launches through the task-01 request pipeline.
-2. Verify prompt, recommendation, and justification are visible by default on the active tab.
-3. Toggle context open/closed and confirm it starts collapsed.
-4. Verify yes/no renders only `yes` and `no` rows and the recommended side is marked inline.
-5. Verify multiple-choice always shows an automatic `Other` row even when the authored JSON omits it.
-6. Verify multi-select allows several normal options plus `Other` at once.
-7. Verify `Other` text uses a dedicated editor path and blocks submit when empty.
-8. Verify option-row notes can be edited on non-`other` rows and appear only for selected options in the built result.
-9. Verify freeform shows a read-only suggested-answer block above user input.
-10. Verify `needs_clarification` and `skipped` dim/lock answer controls but keep prior drafts when reopened.
-11. Verify reopened questions can return to `answered` without losing the preserved draft.
-12. Verify open questions do not block submit.
+1. Open the valid request and confirm the form still launches through the unchanged task-01 request pipeline.
+2. Confirm prompt, recommendation, and justification render by default for the active question, with no duplicated recommendation panel on choice questions.
+3. Confirm context starts collapsed and can be toggled open and closed.
+4. Confirm yes/no renders only `yes` and `no`, with the recommended side marked inline.
+5. Confirm multiple-choice appends `Other` automatically and always renders it last.
+6. Confirm single-select replaces the prior selection.
+7. Confirm multi-select allows several authored options plus `Other` together.
+8. Confirm `Other` opens its own editor path, preserves typed text after deselect/reselect, and blocks submit when selected but empty.
+9. Confirm non-`other` option notes can be edited regardless of current selection and are preserved across deselect/reselect.
+10. Confirm freeform shows a read-only `Suggested answer` block above editable user input.
+11. Confirm marking `skipped` or `needs_clarification` dims and locks answer controls while leaving question-level note and `Reopen` active.
+12. Confirm reopening restores the preserved answer draft and recomputes to `answered` when the preserved draft is already complete.
+13. Confirm open but untouched questions do not block submit.
+14. Confirm `needs_clarification` blocks submit until a note is entered.
+15. Confirm the returned result on cancel includes preserved drafts and computed outcomes, even though task 02 does not yet persist or emit them.
 
 #### Expected user-visible behavior
 
-- Users can move across tabs, edit answers/notes, mark a question skipped or needing clarification, reopen it, and see their prior draft restored.
-- Choice recommendations appear inline on rows; freeform recommendation appears as a separate read-only suggestion block.
-- The review/submit tab clearly shows blocking problems before submit.
+- Users can switch tabs, select answers, edit answer text and notes, mark questions skipped or needing clarification, reopen them, and see prior drafts restored.
+- Choice recommendations appear inline on rows; freeform recommendation appears as `Suggested answer`; justification is always visible.
+- The review tab shows what is answered vs still open and only blocks submit for `Other` text or missing clarification notes.
 
 #### Failure modes to test
 
-- authored `multiple_choice` options include `other`
-- `recommendedOptionIds` reference a missing option
-- `recommendedOptionId` for `yes_no` is not `yes`/`no`
-- selecting `Other` and leaving `otherText` blank
-- marking `needs_clarification` without a note
-- attempting to edit answer controls while a question is `skipped` or `needs_clarification`
-- form submit after reopening a closed question with preserved drafts
+- authored multiple-choice option uses a reserved ID
+- single-select has zero or multiple recommended IDs
+- multi-select recommendation references a missing option
+- `recommendedOptionIds` includes synthetic `other`
+- selected `Other` has blank `otherText`
+- `needs_clarification` has blank note
+- answer controls remain editable while closed
+- reopening does not restore preserved drafts
 
 #### Repo checks
 
-- Reload the extension before interactive testing because files in `extensions/question-runtime/` changed.
+- Reload the extension before interactive verification because files under `extensions/question-runtime/` changed.
 - Run `mise run check` after the TypeScript work is complete.
 
 ### 10. Open Questions / Assumptions
 
-- **Assumption:** Use `context?: string` and one optional multiple-choice secondary text field named `description?: string`; task-02 does not need a richer structured context/subtext object.
-- **Assumption:** `recommendedOptionIds` is a non-empty array for `multiple_choice`; enforce exactly one recommended ID for `selectionMode: "single"` and one-or-more for `selectionMode: "multi"`.
-- **Assumption:** Task 02 returns a structured `QuestionRuntimeFormResult` to `index.ts` and closes the modal, but does not yet emit an agent-facing submission payload; task 03 owns that next step.
+- `None.`
