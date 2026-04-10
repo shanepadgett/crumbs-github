@@ -2,7 +2,7 @@
 
 ## Scope
 
-- The system shall use this runtime as shared infrastructure for `/qna` and `/grill-me`.
+- The system shall use this runtime as shared infrastructure for `/qna` and `/interview`.
 - The system shall keep product-specific workflow and storage policy out of this shared spec.
 - The shared runtime shall own only low-level structured-question request protocol, validation, retry control, and question-form rendering.
 - Product-specific no-question outcomes and terminal screens shall remain product-owned rather than extending the shared question runtime protocol.

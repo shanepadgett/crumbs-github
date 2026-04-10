@@ -4,14 +4,14 @@
 - `Task Title:` `Task 01 — Shared runtime request protocol, validation, and form launch`
 - `Task Signature:` `task-01-shared-runtime-request-protocol-validation-form-launch`
 - `Primary Code Scope:` `.gitignore`, `extensions/question-runtime/index.ts`, `extensions/question-runtime/types.ts`, `extensions/question-runtime/request-paths.ts`, `extensions/question-runtime/request-store.ts`, `extensions/question-runtime/request-validator.ts`, `extensions/question-runtime/repair-messages.ts`, `extensions/question-runtime/form-shell.ts`, `extensions/question-runtime/request-watcher.ts`, `extensions/question-runtime/tool.ts`
-- `Read-only Reference Scope:` `docs/qna/tasks/task-01/task-01.md`, `docs/qna/question-runtime-core-spec.md`, `docs/qna/grill-me-interview-spec.md`, `extensions/qna.ts`, `extensions/shared/option-picker.ts`, `extensions/markdownlint-on-md.ts`, `extensions/web/fetch.ts`, `extensions/codex-compat/index.ts`, `extensions/codex-compat/src/path-policy.ts`, `extensions/shared/tool-observation.ts`, `extensions/workspaces/src/repo-context.ts`, `tsconfig.json`, `package.json`, `mise.toml`
-- `Excluded Scope:` `external/`, `README.md`, `docs/qna/tasks/task-02/` through `task-11/`, `extensions/permissions/`, product-specific `/qna` and `/grill-me` implementation work
+- `Read-only Reference Scope:` `docs/qna/tasks/task-01/task-01.md`, `docs/qna/question-runtime-core-spec.md`, `docs/qna/planning-interview-spec.md`, `extensions/qna.ts`, `extensions/shared/option-picker.ts`, `extensions/markdownlint-on-md.ts`, `extensions/web/fetch.ts`, `extensions/codex-compat/index.ts`, `extensions/codex-compat/src/path-policy.ts`, `extensions/shared/tool-observation.ts`, `extensions/workspaces/src/repo-context.ts`, `tsconfig.json`, `package.json`, `mise.toml`
+- `Excluded Scope:` `external/`, `README.md`, `docs/qna/tasks/task-02/` through `task-11/`, `extensions/permissions/`, product-specific `/qna` and `/interview` implementation work
 
 ### 2. Executive Summary
 
 This task should add the shared low-level question runtime as one standalone extension under `extensions/question-runtime/`. It should issue authorized request tickets, watch only those request files, validate structured question payloads deterministically, run the hidden repair loop with bounded retries, and launch the first read-only tabbed shell for valid requests.
 
-This task should not implement product loop control, terminal screens, answer-entry controls, transcript extraction, qna ledger policy, Grill Me session policy, or structured submission payloads. It should only deliver the reusable runtime plumbing that later product tasks call into.
+This task should not implement product loop control, terminal screens, answer-entry controls, transcript extraction, qna ledger policy, interview session policy, or structured submission payloads. It should only deliver the reusable runtime plumbing that later product tasks call into.
 
 ### 3. Resolved Task-01 Contract Decisions
 
@@ -28,7 +28,7 @@ These are no longer assumptions.
   - request locking
   - read-only question-form shell launch
 - Product-specific no-question outcomes and terminal screens stay outside the shared runtime.
-- The low-level runtime tool is distinct from product-level agent tools such as `/qna` loop tools or Grill Me interview tools.
+- The low-level runtime tool is distinct from product-level agent tools such as `/qna` loop tools or interview tools.
 
 #### 3.2 Authorized path contract
 
@@ -159,7 +159,7 @@ Minimal valid example:
 
 ### `docs/qna/question-runtime-core-spec.md`
 
-- shared runtime for `/qna` and `/grill-me` -> new standalone extension under `extensions/question-runtime/`
+- shared runtime for `/qna` and `/interview` -> new standalone extension under `extensions/question-runtime/`
 - keep product workflow/storage out -> no transcript, ledger, session-store, or submit-policy logic in task 01
 - stable caller-owned `questionId` -> validator requires unique non-empty IDs
 - mutable presentation fields without identity churn -> validator treats `prompt` as data, not identity
@@ -178,9 +178,9 @@ Minimal valid example:
 - hidden validation messages with request ID/path/issues -> deterministic message formatter
 - hidden retry budget of 4, Continue/Abort, freeze while pending -> store + prompt queue model above
 
-### `docs/qna/grill-me-interview-spec.md`
+### `docs/qna/planning-interview-spec.md`
 
-- `/grill-me` shares only the low-level question runtime -> runtime stays product-agnostic and form-screen-only
+- `/interview` shares only the low-level question runtime -> runtime stays product-agnostic and form-screen-only
 
 ### 5. Current Architecture Deep Dive
 
@@ -499,7 +499,7 @@ Manual verification:
 ### 11. Non-Goals for Task 01
 
 - no rewrite of `extensions/qna.ts`
-- no `/grill-me` command work
+- no `/interview` command work
 - no answer-entry controls
 - no recommendation/justification rendering
 - no submission payload construction
