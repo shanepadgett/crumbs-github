@@ -22,7 +22,6 @@ import { registerQnaTool } from "./qna/tool.js";
 
 export default function qnaExtension(pi: ExtensionAPI): void {
   const loopController = new QnaLoopController(pi);
-  loopController.handleSessionReset();
 
   registerQnaCommand(pi, {
     loopController,
