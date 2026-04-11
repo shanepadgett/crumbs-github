@@ -4,11 +4,12 @@ import {
   isQnaLoopKickoffMessage,
   parseQnaLoopKickoffDetails,
 } from "./loop-control-message.js";
-import type { QnaLoopFinishReason, QnaOpenQuestionReference } from "./types.js";
+import type { QnaLoopFinishReason, QnaLoopQuestionReference, QnaLoopSource } from "./types.js";
 
 interface ActiveLoopState {
   loopId: string;
-  openQuestions: QnaOpenQuestionReference[];
+  source: QnaLoopSource;
+  reviewQuestions: QnaLoopQuestionReference[];
   discoverySummary?: string;
   restoreQuestionRuntimeRequest: boolean;
 }
@@ -24,9 +25,9 @@ function nextLoopId(): string {
   return `qna_loop_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
 }
 
-function formatOpenQuestions(openQuestions: QnaOpenQuestionReference[]): string {
-  if (openQuestions.length === 0) return "No open questions remain.";
-  return openQuestions
+function formatReviewQuestions(reviewQuestions: QnaLoopQuestionReference[]): string {
+  if (reviewQuestions.length === 0) return "No open questions remain for structured qna review.";
+  return reviewQuestions
     .map((question) => `- ${question.questionId}: ${question.questionText}`)
     .join("\n");
 }
@@ -42,12 +43,21 @@ export class QnaLoopController {
     return this.activeLoop !== null;
   }
 
-  startLoop(input: { openQuestions: QnaOpenQuestionReference[]; discoverySummary?: string }): {
+  getAllowedQuestionIds(): string[] {
+    return this.activeLoop?.reviewQuestions.map((question) => question.questionId) ?? [];
+  }
+
+  startLoop(input: {
+    source: QnaLoopSource;
+    reviewQuestions: QnaLoopQuestionReference[];
+    discoverySummary?: string;
+  }): {
     startedNewLoop: boolean;
     loopId: string;
   } {
     if (this.activeLoop) {
-      this.activeLoop.openQuestions = [...input.openQuestions];
+      this.activeLoop.source = input.source;
+      this.activeLoop.reviewQuestions = [...input.reviewQuestions];
       this.activeLoop.discoverySummary = input.discoverySummary;
       return { startedNewLoop: false, loopId: this.activeLoop.loopId };
     }
@@ -65,7 +75,8 @@ export class QnaLoopController {
     const loopId = nextLoopId();
     this.activeLoop = {
       loopId,
-      openQuestions: [...input.openQuestions],
+      source: input.source,
+      reviewQuestions: [...input.reviewQuestions],
       discoverySummary: input.discoverySummary,
       restoreQuestionRuntimeRequest,
     };
@@ -76,7 +87,8 @@ export class QnaLoopController {
       buildQnaLoopKickoffMessage({
         type: "kickoff",
         loopId,
-        openQuestionIds: input.openQuestions.map((question) => question.questionId),
+        source: input.source,
+        reviewQuestionIds: input.reviewQuestions.map((question) => question.questionId),
         discoverySummary: input.discoverySummary,
       }),
       { deliverAs: "steer", triggerTurn: true },
@@ -101,16 +113,27 @@ export class QnaLoopController {
   ): { systemPrompt: string } | undefined {
     if (!this.activeLoop) return undefined;
 
+    const sourcePrompt =
+      this.activeLoop.source === "manual_qna"
+        ? [
+            "Manual /qna loop is active.",
+            "You may ask ordinary clarifying questions in chat when structured capture is unnecessary.",
+            "Use the qna tool only for structured review of open questions or to explicitly complete this loop.",
+          ]
+        : [
+            "/qna-ledger sent branch-local updates and activated follow-up review.",
+            "Continue needs_clarification follow-up in ordinary chat.",
+            "Use the qna tool only for structured review of currently open ordinary QnA questions.",
+          ];
+
     const prompt = [
-      "Manual /qna loop is active.",
-      "You may ask ordinary clarifying questions in chat when structured capture is unnecessary.",
-      "Use the qna tool only for structured review of open questions or to explicitly complete this loop.",
+      ...sourcePrompt,
       'Calling qna with action: "complete" ends only the current loop and leaves any remaining open backlog for later.',
       this.activeLoop.discoverySummary
         ? `Discovery summary: ${this.activeLoop.discoverySummary}`
         : undefined,
       "Current open ordinary QnA questions:",
-      formatOpenQuestions(this.activeLoop.openQuestions),
+      formatReviewQuestions(this.activeLoop.reviewQuestions),
     ]
       .filter((line): line is string => !!line)
       .join("\n");

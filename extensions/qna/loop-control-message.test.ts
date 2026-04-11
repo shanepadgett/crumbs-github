@@ -6,7 +6,8 @@ describe("loop-control-message", () => {
     const message = buildQnaLoopKickoffMessage({
       type: "kickoff",
       loopId: "loop_1",
-      openQuestionIds: ["qna_0001"],
+      source: "manual_qna",
+      reviewQuestionIds: ["qna_0001"],
       discoverySummary: "QnA ledger updated: 1 new",
     });
 
@@ -24,7 +25,7 @@ describe("loop-control-message", () => {
         customType: "qna.loop.control",
         content: "bad",
         display: false,
-        details: { type: "kickoff", loopId: "", openQuestionIds: [] },
+        details: { type: "kickoff", loopId: "", source: "manual_qna", reviewQuestionIds: [] },
         timestamp: Date.now(),
       } as any),
     ).toBe(false);

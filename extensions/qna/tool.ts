@@ -3,19 +3,12 @@ import type { ExtensionAPI, ExtensionContext } from "@mariozechner/pi-coding-age
 import { Text } from "@mariozechner/pi-tui";
 import { showQuestionRuntimeFormShell } from "../question-runtime/form-shell.js";
 import { validateAuthorizedQuestionRequest } from "../question-runtime/request-validator.js";
-import type {
-  AuthorizedQuestionRequest,
-  QuestionRuntimeFormResult,
-} from "../question-runtime/types.js";
+import type { QuestionRuntimeFormResult } from "../question-runtime/types.js";
 import { QnaBranchStateStore } from "./branch-state.js";
 import { QnaLoopController } from "./loop-controller.js";
+import { buildQnaRuntimeRequest } from "./runtime-request.js";
 import { applyQnaDraftSnapshot, applyQnaStructuredSubmitResult } from "./runtime-submit.js";
-import type {
-  QnaBranchStateSnapshot,
-  QnaOpenQuestionReference,
-  QnaToolInput,
-  QnaToolResultDetails,
-} from "./types.js";
+import type { QnaBranchStateSnapshot, QnaToolInput, QnaToolResultDetails } from "./types.js";
 
 const QNA_TOOL_PARAMS = Type.Union([
   Type.Object({
@@ -28,7 +21,7 @@ const QNA_TOOL_PARAMS = Type.Union([
   }),
 ]);
 
-function getOpenQuestions(state: QnaBranchStateSnapshot): QnaOpenQuestionReference[] {
+function getOpenQuestions(state: QnaBranchStateSnapshot) {
   return state.questions
     .filter((question) => question.state === "open")
     .map((question) => ({ questionId: question.questionId, questionText: question.questionText }));
@@ -51,42 +44,22 @@ export interface RegisterQnaToolOptions {
   showForm?: typeof showQuestionRuntimeFormShell;
 }
 
-export function buildQuestionRuntimeRequest(input: {
-  state: QnaBranchStateSnapshot;
-  batchQuestionIds: string[];
-}): AuthorizedQuestionRequest {
-  const openQuestions = getOpenQuestionMap(input.state);
-
-  return {
-    questions: input.batchQuestionIds.map((questionId) => {
-      const question = openQuestions.get(questionId);
-      if (!question) {
-        throw new Error(`Question ${questionId} is not currently open`);
-      }
-
-      return {
-        questionId: question.questionId,
-        kind: "freeform" as const,
-        prompt: question.questionText,
-        justification:
-          "Structured manual QnA review captures the current authoritative outcome for this open ledger question.",
-        suggestedAnswer: "Answer with the clearest current decision, fact, or unresolved blocker.",
-      };
-    }),
-    draftSnapshot: input.batchQuestionIds
-      .map((questionId) => input.state.runtimeDraftsByQuestionId[questionId])
-      .filter((draft) => !!draft),
-  };
-}
-
-function validateBatchInput(state: QnaBranchStateSnapshot, questionIds: string[]): string[] {
+function validateBatchInput(
+  state: QnaBranchStateSnapshot,
+  allowedQuestionIds: string[],
+  questionIds: string[],
+): string[] {
   const batchQuestionIds = dedupeQuestionIds(questionIds);
   if (batchQuestionIds.length === 0) {
     throw new Error("questionIds must contain at least one open question id");
   }
 
+  const allowedIds = new Set(allowedQuestionIds);
   const openQuestions = getOpenQuestionMap(state);
   for (const questionId of batchQuestionIds) {
+    if (!allowedIds.has(questionId)) {
+      throw new Error(`Question ${questionId} is outside the active qna loop`);
+    }
     if (!openQuestions.has(questionId)) {
       throw new Error(`Question ${questionId} is not currently open`);
     }
@@ -102,8 +75,16 @@ async function executeQuestionBatch(
   state: QnaBranchStateSnapshot,
   questionIds: string[],
 ): Promise<{ content: Array<{ type: "text"; text: string }>; details: QnaToolResultDetails }> {
-  const batchQuestionIds = validateBatchInput(state, questionIds);
-  const request = buildQuestionRuntimeRequest({ state, batchQuestionIds });
+  const batchQuestionIds = validateBatchInput(
+    state,
+    options.loopController.getAllowedQuestionIds(),
+    questionIds,
+  );
+  const request = buildQnaRuntimeRequest({
+    state,
+    questionIds: batchQuestionIds,
+    allowedStates: ["open"],
+  });
   const validation = validateAuthorizedQuestionRequest(JSON.stringify(request));
   if (!validation.ok) {
     throw new Error(validation.issues[0]?.message ?? "Invalid qna runtime request");
@@ -181,7 +162,7 @@ export function registerQnaTool(pi: ExtensionAPI, options: RegisterQnaToolOption
     description: "Review open ordinary QnA ledger questions during an active /qna loop.",
     promptSnippet: "Review open ordinary QnA questions during an active /qna loop",
     promptGuidelines: [
-      "Use qna only while a manual /qna loop is active.",
+      "Use qna only while an active ordinary QnA loop is active.",
       'Use action: "question_batch" for structured review of specific open questionIds.',
       'Use action: "complete" only when the current /qna loop should end without closing remaining backlog.',
     ],

@@ -1,9 +1,12 @@
+import type { QnaLoopSource } from "./types.js";
+
 export const QNA_LOOP_CONTROL_CUSTOM_TYPE = "qna.loop.control";
 
 export interface QnaLoopKickoffDetails {
   type: "kickoff";
   loopId: string;
-  openQuestionIds: string[];
+  source: QnaLoopSource;
+  reviewQuestionIds: string[];
   discoverySummary?: string;
 }
 
@@ -19,10 +22,11 @@ export function parseQnaLoopKickoffDetails(value: unknown): QnaLoopKickoffDetail
   if (!isObject(value)) return null;
   if (value.type !== "kickoff") return null;
   if (!isNonEmptyString(value.loopId)) return null;
-  if (!Array.isArray(value.openQuestionIds)) return null;
+  if (value.source !== "manual_qna" && value.source !== "qna_ledger_send") return null;
+  if (!Array.isArray(value.reviewQuestionIds)) return null;
 
-  const openQuestionIds = value.openQuestionIds.filter(isNonEmptyString);
-  if (openQuestionIds.length !== value.openQuestionIds.length) return null;
+  const reviewQuestionIds = value.reviewQuestionIds.filter(isNonEmptyString);
+  if (reviewQuestionIds.length !== value.reviewQuestionIds.length) return null;
 
   if (value.discoverySummary !== undefined && !isNonEmptyString(value.discoverySummary)) {
     return null;
@@ -31,7 +35,8 @@ export function parseQnaLoopKickoffDetails(value: unknown): QnaLoopKickoffDetail
   return {
     type: "kickoff",
     loopId: value.loopId,
-    openQuestionIds,
+    source: value.source,
+    reviewQuestionIds,
     discoverySummary: value.discoverySummary,
   };
 }

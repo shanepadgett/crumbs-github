@@ -91,7 +91,11 @@ function maybeStartLoop(
   }
 
   options.loopController.startLoop({
-    openQuestions: unresolvedQuestions,
+    source: "manual_qna",
+    reviewQuestions: unresolvedQuestions.map((question) => ({
+      ...question,
+      state: "open" as const,
+    })),
     discoverySummary,
   });
   return true;

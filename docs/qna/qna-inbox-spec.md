@@ -6,6 +6,7 @@
 - The system shall treat `/qna` as opportunistic capture for the current chat branch rather than as a repo-scoped planning system.
 - The system shall provide `/qna-ledger` as the browsing and editing view for ordinary QnA items.
 - `/qna` and `/qna-ledger` shall not display or manage interview sessions.
+- When the current chat is attached to an interview session, the system shall block `/qna-ledger` and direct the user back to the interview instead of mixing the two systems in one chat.
 
 ## Entry and loop behavior
 
@@ -69,6 +70,7 @@
 - When `/qna-ledger` sends updates, the system shall batch all unsent changed ordinary QnA items into one structured payload.
 - When `/qna-ledger` sends updates, the system shall send only items changed since the last send.
 - When `/qna-ledger` sends updates and any item is `needs_clarification`, the system shall reactivate the loop-scoped `qna` tool.
+- When `/qna-ledger` reactivates the loop-scoped `qna` tool after a `needs_clarification` send, the system shall preserve the existing structured-review semantics of `qna` for currently `open` ordinary QnA items while allowing clarification follow-up to continue in ordinary chat and later ledger edits.
 
 ## Export
 

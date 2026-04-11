@@ -1,24 +1,22 @@
 /**
  * QnA Ledger Extension
  *
- * What it does: adds a `/qna` command that reconciles branch-local transcript
- * content into a hidden QnA ledger, then starts a scoped manual QnA loop when
- * unresolved questions remain.
+ * What it does: adds `/qna` transcript reconciliation and `/qna-ledger`
+ * branch-local ledger maintenance for ordinary QnA.
  *
- * How to use it: run `/qna` in an interactive session after new user or
- * assistant chat. The command refreshes hidden branch-local QnA state, starts
- * the loop-scoped `qna` tool when needed, and exits cleanly when nothing
- * remains.
+ * How to use it: run `/qna` after new chat to refresh discovery, or run
+ * `/qna-ledger` to browse, edit, send, and export existing ordinary QnA items.
  *
  * Example:
  * 1) Chat until open questions or decisions appear.
- * 2) Run `/qna`.
+ * 2) Run `/qna` or `/qna-ledger`.
  * 3) Use chat or the scoped `qna` tool to review unresolved items.
  */
 
 import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
 import { registerQnaCommand } from "./qna/command.js";
 import { getAttachedInterviewSessionIdFromBranch } from "./qna/interview-attachment.js";
+import { registerQnaLedgerCommand } from "./qna/ledger-command.js";
 import { QnaLoopController, registerQnaLoopLifecycle } from "./qna/loop-controller.js";
 import { registerQnaTool } from "./qna/tool.js";
 
@@ -27,6 +25,10 @@ export default function qnaExtension(pi: ExtensionAPI): void {
   loopController.handleSessionReset();
 
   registerQnaCommand(pi, {
+    loopController,
+    getAttachedInterviewSessionId: getAttachedInterviewSessionIdFromBranch,
+  });
+  registerQnaLedgerCommand(pi, {
     loopController,
     getAttachedInterviewSessionId: getAttachedInterviewSessionIdFromBranch,
   });

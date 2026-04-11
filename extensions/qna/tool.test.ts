@@ -65,6 +65,9 @@ describe("qna tool", () => {
         isActive() {
           return true;
         },
+        getAllowedQuestionIds() {
+          return ["qna_0001", "qna_0002"];
+        },
         markSettled(reason: string) {
           settled.push(reason);
         },
@@ -101,6 +104,9 @@ describe("qna tool", () => {
       loopController: {
         isActive() {
           return true;
+        },
+        getAllowedQuestionIds() {
+          return ["qna_0001", "qna_0002"];
         },
         markSettled() {},
       } as any,
@@ -150,6 +156,9 @@ describe("qna tool", () => {
       loopController: {
         isActive() {
           return true;
+        },
+        getAllowedQuestionIds() {
+          return ["qna_0001", "qna_0002"];
         },
         markSettled(reason: string) {
           settled.push(reason);
@@ -202,6 +211,9 @@ describe("qna tool", () => {
         isActive() {
           return true;
         },
+        getAllowedQuestionIds() {
+          return ["qna_0001", "qna_0002"];
+        },
         markSettled(reason: string) {
           settled.push(reason);
         },
@@ -222,5 +234,41 @@ describe("qna tool", () => {
     expect(result.details.remainingOpenQuestionIds).toEqual(["qna_0001", "qna_0002"]);
     expect(pi.appended).toHaveLength(0);
     expect(settled).toEqual(["agent_complete"]);
+  });
+
+  test("rejects ids outside the active loop scope", async () => {
+    const pi = makePi();
+    const tool = pi.register({
+      loopController: {
+        isActive() {
+          return true;
+        },
+        getAllowedQuestionIds() {
+          return ["qna_0001"];
+        },
+        markSettled() {},
+      } as any,
+      async showForm() {
+        throw new Error("should not open");
+      },
+    });
+
+    await expect(
+      tool.execute(
+        "call_1",
+        { action: "question_batch", questionIds: ["qna_0002"] },
+        undefined,
+        undefined,
+        {
+          hasUI: true,
+          sessionManager: {
+            getBranch() {
+              return [customStateEntry("c1", buildState())];
+            },
+          },
+          ui: { notify() {} },
+        },
+      ),
+    ).rejects.toThrow("outside the active qna loop");
   });
 });

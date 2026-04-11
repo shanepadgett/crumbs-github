@@ -302,9 +302,10 @@ describe("runQnaCommand", () => {
     expect(appended).toHaveLength(1);
     expect(started).toHaveLength(1);
     expect(started[0]).toEqual({
-      openQuestions: [
-        { questionId: "qna_0001", questionText: "Who owns this?" },
-        { questionId: "qna_0002", questionText: "What is the deadline?" },
+      source: "manual_qna",
+      reviewQuestions: [
+        { questionId: "qna_0001", questionText: "Who owns this?", state: "open" },
+        { questionId: "qna_0002", questionText: "What is the deadline?", state: "open" },
       ],
       discoverySummary: "QnA ledger updated: 1 new",
     });

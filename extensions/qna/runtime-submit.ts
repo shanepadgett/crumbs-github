@@ -1,5 +1,6 @@
 import type {
   QuestionRuntimeQuestionDraft,
+  SubmittedQuestionRuntimeQuestionOutcome,
   QuestionRuntimeStructuredSubmitResult,
 } from "../question-runtime/types.js";
 import type { QnaBranchStateSnapshot, QnaLedgerQuestionRecord } from "./types.js";
@@ -12,6 +13,58 @@ function bumpRevision(record: QnaLedgerQuestionRecord): QnaLedgerQuestionRecord[
   return {
     ...record.sendState,
     localRevision: record.sendState.localRevision + 1,
+  };
+}
+
+function getAuthoritativeRecordShape(
+  record: QnaLedgerQuestionRecord,
+): Omit<QnaLedgerQuestionRecord, "sendState"> {
+  const { sendState: _sendState, ...rest } = record;
+  return rest;
+}
+
+export function didLedgerRecordAuthoritativeStateChange(
+  left: QnaLedgerQuestionRecord,
+  right: QnaLedgerQuestionRecord,
+): boolean {
+  return (
+    JSON.stringify(getAuthoritativeRecordShape(left)) !==
+    JSON.stringify(getAuthoritativeRecordShape(right))
+  );
+}
+
+export function applySubmittedOutcomeToLedgerRecord(input: {
+  record: QnaLedgerQuestionRecord;
+  outcome: SubmittedQuestionRuntimeQuestionOutcome;
+}): QnaLedgerQuestionRecord {
+  const { record, outcome } = input;
+  if (record.questionId !== outcome.questionId) {
+    throw new Error(`Outcome ${outcome.questionId} does not match record ${record.questionId}`);
+  }
+
+  if (outcome.state === "answered") {
+    return {
+      ...record,
+      state: "answered",
+      submittedOutcome: structuredClone(outcome),
+      sendState: bumpRevision(record),
+    };
+  }
+
+  if (outcome.state === "skipped") {
+    return {
+      ...record,
+      state: "skipped",
+      submittedOutcome: structuredClone(outcome),
+      sendState: bumpRevision(record),
+    };
+  }
+
+  return {
+    ...record,
+    state: "needs_clarification",
+    submittedOutcome: structuredClone(outcome),
+    sendState: bumpRevision(record),
   };
 }
 
@@ -99,33 +152,20 @@ export function applyQnaStructuredSubmitResult(input: {
     }
 
     changedQuestionIds.push(question.questionId);
-    if (outcome.state === "answered") {
+    const nextRecord = applySubmittedOutcomeToLedgerRecord({ record: question, outcome });
+
+    if (nextRecord.state === "answered") {
       answered += 1;
-      return {
-        ...question,
-        state: "answered",
-        submittedOutcome: outcome,
-        sendState: bumpRevision(question),
-      };
+      return nextRecord;
     }
 
-    if (outcome.state === "skipped") {
+    if (nextRecord.state === "skipped") {
       skipped += 1;
-      return {
-        ...question,
-        state: "skipped",
-        submittedOutcome: outcome,
-        sendState: bumpRevision(question),
-      };
+      return nextRecord;
     }
 
     needsClarification += 1;
-    return {
-      ...question,
-      state: "needs_clarification",
-      submittedOutcome: outcome,
-      sendState: bumpRevision(question),
-    };
+    return nextRecord;
   });
 
   return {

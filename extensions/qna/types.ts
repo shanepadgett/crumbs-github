@@ -42,6 +42,9 @@ export type QnaLedgerQuestionRecord =
       supersededByQuestionId: string;
     });
 
+export type QnaLedgerRecordState = QnaLedgerQuestionRecord["state"];
+export type QnaLedgerFilter = "all" | QnaLedgerRecordState;
+
 export interface QnaBranchStateSnapshot {
   schemaVersion: 1;
   durableBoundaryEntryId?: string;
@@ -86,6 +89,32 @@ export interface QnaReconcileModelResponse {
 export interface QnaOpenQuestionReference {
   questionId: string;
   questionText: string;
+}
+
+export type QnaLoopSource = "manual_qna" | "qna_ledger_send";
+
+export interface QnaLoopQuestionReference {
+  questionId: string;
+  questionText: string;
+  state: "open";
+}
+
+export interface QnaLedgerSendItem {
+  questionId: string;
+  questionText: string;
+  state: QnaLedgerRecordState;
+  localRevision: number;
+  lastSentRevision: number;
+  submittedOutcome?: SubmittedQuestionRuntimeQuestionOutcome;
+  supersededByQuestionId?: string;
+}
+
+export interface QnaLedgerSendBatch {
+  schemaVersion: 1;
+  type: "ordinary_qna_ledger_updates";
+  sentAt: string;
+  requiresClarification: boolean;
+  items: QnaLedgerSendItem[];
 }
 
 export type QnaToolInput =
