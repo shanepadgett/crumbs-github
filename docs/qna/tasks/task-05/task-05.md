@@ -2,7 +2,7 @@
 
 ## Overview
 
-Add the interactive `/qna` loop behavior around the ledger-backed extraction pipeline. This task scopes the agent-facing `qna` tool above the shared runtime, keeps ordinary chat clarification available when structured capture is unnecessary, and defines how empty runs, untouched questions, and loop completion behave.
+Add the interactive `/qna` loop behavior around the ledger-backed extraction pipeline. This task scopes the agent-facing `qna` tool above the shared runtime, applies shared-runtime submit results into the task-04 authoritative ledger state model, preserves returned `draftSnapshot` data, and defines how empty runs, untouched questions, and loop completion behave.
 
 ## Grouping methodology
 
@@ -28,6 +28,7 @@ This is one committable and testable unit because it completes the user-facing `
 - When the current `/qna` loop settles, the system shall deactivate the agent-facing `qna` tool.
 - When the current chat is attached to an interview session, the system shall block `/qna` and direct the user back to the interview instead of mixing the two systems in one chat.
 - `/qna` shall consume the shared runtime's structured submit result (`question_outcomes` or `no_user_response`) rather than parsing freeform text.
+- When `/qna` applies structured submit results, the affected ordinary QnA records shall adopt authoritative ledger states `answered`, `skipped`, or `needs_clarification` without reparsing freeform text.
 - When a shared runtime form closes or cancels during `/qna`, the system shall preserve the returned `draftSnapshot` in branch-local state without treating it as a send.
 - When a visible ordinary QnA question is left untouched on submit, the system shall keep that question `open` in the branch-local ledger.
 - When the form is submitted with no explicit outcomes in manual `/qna`, the system shall persist ledger state and notify the user without fabricating an agent response.
@@ -38,7 +39,7 @@ This is one committable and testable unit because it completes the user-facing `
 
 ## Expected end-to-end outcome
 
-- A user can run `/qna` as a scoped manual loop layered above the shared runtime, consume structured submit results, leave others open, and exit cleanly without losing unresolved backlog or cancelled draft state.
+- A user can run `/qna` as a scoped manual loop layered above the shared runtime, consume structured submit results into authoritative `answered` / `skipped` / `needs_clarification` ledger states, leave others open, and exit cleanly without losing unresolved backlog or cancelled draft state.
 - Empty `/qna` runs do not show dead-end UI and instead update the scan boundary and notify the user.
 - `/qna` refuses to run inside an attached interview chat.
 

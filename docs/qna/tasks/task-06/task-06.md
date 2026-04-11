@@ -2,7 +2,7 @@
 
 ## Overview
 
-Build the ordinary QnA ledger browser for the current branch. This task adds the `/qna-ledger` overlay, state filtering, direct editing of branch-local records, batched update sending, and timestamped Markdown export under `docs/qna/`.
+Build the ordinary QnA ledger browser for the current branch. This task adds the `/qna-ledger` overlay, state filtering across the authoritative record state model from tasks 04-05, direct editing of branch-local records, batched update sending, and timestamped Markdown export under `docs/qna/`.
 
 ## Grouping methodology
 
@@ -24,6 +24,7 @@ This is one committable and testable unit because it is the complete maintenance
 - `/qna` and `/qna-ledger` shall not display or manage interview sessions.
 - When the user runs `/qna-ledger`, the system shall open a simple ordinary-QnA ledger overlay for the current branch.
 - The `/qna-ledger` overlay shall prioritize browsing and filtering ordinary QnA questions rather than cross-session planning.
+- The `/qna-ledger` overlay shall expose the authoritative ordinary-QnA record state for filtering and editing, including transcript-closed states such as `answered_in_chat` and `superseded`.
 - The `/qna-ledger` overlay shall allow filtering by question state.
 - The `/qna-ledger` overlay shall allow answering, skipping, marking `needs_clarification`, reopening, and editing previously closed ordinary QnA questions.
 - When the user edits an ordinary QnA question from `/qna-ledger`, the system shall update the branch-local ledger immediately.
@@ -36,13 +37,13 @@ This is one committable and testable unit because it is the complete maintenance
 
 ## Expected end-to-end outcome
 
-- A user can browse the current branch's ordinary QnA backlog, filter by state, and edit items directly from a dedicated overlay.
+- A user can browse the current branch's ordinary QnA backlog, including transcript-closed `answered_in_chat` and `superseded` items, filter by state, and edit items directly from a dedicated overlay.
 - The user can send just the unsent delta back to the agent in one structured batch.
 - The user can export a shareable Markdown snapshot of the branch-local ordinary QnA state.
 
 ## User test at exit
 
-1. Open `/qna-ledger` and filter the current branch's questions by state.
+1. Open `/qna-ledger` and filter the current branch's questions by state, including transcript-closed items.
 2. Edit an answered or closed item and confirm the ledger updates immediately.
 3. Trigger `Send updates` and confirm only changed items are batched into one payload.
 4. Export the ledger and confirm a timestamped Markdown file is written under `docs/qna/`.
