@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import { readdirSync, statSync, writeFileSync } from "node:fs";
+import { readdirSync, writeFileSync } from "node:fs";
 import { join, extname } from "node:path";
 
 const targetDir = process.argv[2];
