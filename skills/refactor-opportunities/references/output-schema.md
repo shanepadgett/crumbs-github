@@ -4,7 +4,7 @@ All review files must match this schema. Scripts depend on it.
 
 ## 1. Section findings file
 
-One file per section reviewer.
+One file per section reviewer. No prose between findings. If none, write `None.` under `## Findings`. Summary counts must match. One output file only.
 
 ```markdown
 # <Lens>: <Section>
@@ -25,13 +25,6 @@ One file per section reviewer.
 - Medium: <N>
 - Low: <N>
 ```
-
-Rules:
-
-- No prose between findings.
-- If none, write `None.` under `## Findings`.
-- Summary counts must match findings.
-- One output file only.
 
 ## 2. Reconciled findings file
 
