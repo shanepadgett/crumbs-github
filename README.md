@@ -1,6 +1,14 @@
-# crumbs-pi-extensions
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/_media/crumbs-logo-dark.png">
+    <source media="(prefers-color-scheme: light)" srcset="docs/_media/crumbs-logo-light.png">
+    <img alt="lattice" src="docs/_media/crumbs-logo-light.png" style="max-width: 100%; border-radius: 8px;">
+  </picture>
+</p>
 
-Personal Pi extensions packaged from user-level extensions.
+<p align="center">
+  Tiny Pi helpers and playful extension experiments, bundled in one cozy crumb pile.
+</p>
 
 ## Prerequisites
 
