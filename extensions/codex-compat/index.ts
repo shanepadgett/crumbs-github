@@ -61,19 +61,122 @@ function plainTextResult(text: string) {
   return [{ type: "text" as const, text }];
 }
 
-function renderApplyPatchCall(args: any, theme: any) {
-  const targets = args?.input?.match(/^\*\*\* (?:Add|Delete|Update) File: .+$/gm)?.length ?? 0;
+function trimApplyPatchPreviewLines(lines: string[], limit: number): string[] {
+  if (lines.length <= limit) return lines;
+  return [...lines.slice(0, limit), `... (${lines.length - limit} more lines)`];
+}
+
+function extractApplyPatchBody(input: string): string {
+  const beginIndex = input.indexOf("*** Begin Patch");
+  return beginIndex >= 0 ? input.slice(beginIndex) : input;
+}
+
+function inspectApplyPatchInput(input: string | undefined) {
+  const normalized =
+    typeof input === "string" ? extractApplyPatchBody(input.replace(/\r\n/g, "\n")) : "";
+  const lines = normalized.length > 0 ? normalized.split("\n") : [];
+  const operationMatches = normalized.match(/^\*\*\* (Add|Delete|Update) File: (.+)$/gm) ?? [];
+
+  let activeKind: "add" | "delete" | "update" | undefined;
+  let activePath: string | undefined;
+  let operationStart = -1;
+
+  for (let index = 0; index < lines.length; index += 1) {
+    const line = lines[index];
+    const match = line.match(/^\*\*\* (Add|Delete|Update) File: (.+)$/);
+    if (!match) continue;
+    activeKind = match[1]?.toLowerCase() as "add" | "delete" | "update";
+    activePath = match[2]?.trim();
+    operationStart = index;
+  }
+
+  const previewSource = operationStart >= 0 ? lines.slice(operationStart + 1) : [];
+  const previewLines = previewSource.filter((line) => {
+    if (line.startsWith("*** ")) return false;
+    if (activeKind === "add") return line.startsWith("+");
+    if (activeKind === "delete") return false;
+    if (activeKind === "update") {
+      return (
+        line.startsWith("+") ||
+        line.startsWith("-") ||
+        line.startsWith(" ") ||
+        line.startsWith("@@") ||
+        line === "*** End of File"
+      );
+    }
+    return false;
+  });
+
+  return {
+    targetCount: operationMatches.length,
+    activeKind,
+    activePath,
+    previewLines,
+    hasBeginPatch: normalized.includes("*** Begin Patch"),
+    isComplete: normalized.includes("*** End Patch"),
+  };
+}
+
+function formatApplyPatchCallAction(kind: "add" | "delete" | "update" | undefined): string {
+  if (kind === "add") return "Adding";
+  if (kind === "delete") return "Deleting";
+  if (kind === "update") return "Updating";
+  return "Composing";
+}
+
+function renderApplyPatchCall(args: any, theme: any, context?: any) {
+  const inspected = inspectApplyPatchInput(args?.input);
+  const targets = inspected.targetCount;
   const label = targets > 0 ? `${targets} file${targets === 1 ? "" : "s"}` : "patch";
-  return new Text(
-    `${theme.fg("toolTitle", theme.bold("apply_patch"))} ${theme.fg("accent", label)}`,
-    0,
-    0,
-  );
+
+  const header = `${theme.fg("toolTitle", theme.bold("apply_patch"))} ${theme.fg("accent", label)}`;
+
+  if (!args?.input) {
+    return new Text(header, 0, 0);
+  }
+
+  const activity = inspected.activePath
+    ? `${formatApplyPatchCallAction(inspected.activeKind)} ${inspected.activePath}`
+    : inspected.hasBeginPatch
+      ? "Composing patch"
+      : "Waiting for patch";
+
+  const previewLimit = context?.expanded ? 20 : 6;
+  const previewLines = trimApplyPatchPreviewLines(inspected.previewLines, previewLimit)
+    .map((line) => {
+      if (line.startsWith("... (")) return theme.fg("muted", line);
+      if (line.startsWith("+")) return theme.fg("accent", line);
+      if (line.startsWith("-")) return theme.fg("muted", line);
+      if (line.startsWith("@@") || line === "*** End of File") return theme.fg("muted", line);
+      return theme.fg("toolOutput", line);
+    })
+    .join("\n");
+
+  if (!context?.expanded) {
+    const compact = [
+      theme.fg("muted", activity),
+      inspected.isComplete ? theme.fg("muted", "ready") : "",
+    ]
+      .filter(Boolean)
+      .join(" · ");
+    return new Text(compact ? `${header}\n${compact}` : header, 0, 0);
+  }
+
+  const sections = [header, theme.fg("muted", activity), previewLines].filter(Boolean).join("\n\n");
+  return new Text(sections, 0, 0);
 }
 
 function formatApplyPatchProgress(summary: ApplyPatchSummary): string {
   const noun = summary.totalOperations === 1 ? "file" : "files";
   return `${summary.completedOperations}/${summary.totalOperations} ${noun}`;
+}
+
+function formatApplyPatchStatus(summary: ApplyPatchSummary): string {
+  const phase = summary.phase === "preparing" ? "Preparing patch" : "Applying patch";
+  const parts = [phase, formatApplyPatchProgress(summary)];
+  const badge = formatApplyPatchBadge(summary);
+  if (badge) parts.push(badge);
+  return parts.join(" · ");
 }
 
 function formatApplyPatchBadge(summary: ApplyPatchSummary): string {
@@ -106,7 +209,65 @@ function formatApplyPatchChange(change: ApplyPatchChange): string {
 }
 
 function formatApplyPatchProgressContent(summary: ApplyPatchSummary): string {
-  return `Applying patch (${formatApplyPatchProgress(summary)})...`;
+  const activity = summary.currentFile
+    ? ` ${summary.currentFile}${summary.currentChunk && summary.totalChunks ? ` (${summary.currentChunk}/${summary.totalChunks})` : ""}`
+    : "";
+  return `${formatApplyPatchStatus(summary)}${activity}`;
+}
+
+function formatApplyPatchOperation(summary: ApplyPatchSummary): string {
+  if (!summary.activeOperation) return "Working";
+  if (summary.activeOperation === "add") return "Adding";
+  if (summary.activeOperation === "delete") return "Deleting";
+  return "Updating";
+}
+
+function renderApplyPatchCurrentDiff(summary: ApplyPatchSummary, theme: any): string {
+  if (!summary.currentFile) return "";
+
+  const header = theme.fg(
+    "accent",
+    `${formatApplyPatchOperation(summary)} ${summary.currentFile}${summary.currentChunk !== undefined && summary.totalChunks ? ` (${summary.currentChunk}/${summary.totalChunks})` : ""}`,
+  );
+  const diff = (summary.currentDiff ?? [])
+    .map((line) => {
+      if (line.startsWith("... (")) return theme.fg("muted", line);
+      if (line.startsWith("+")) return theme.fg("accent", line);
+      if (line.startsWith("-")) return theme.fg("muted", line);
+      if (line.startsWith("@@") || line === "*** End of File") return theme.fg("muted", line);
+      return theme.fg("toolOutput", line);
+    })
+    .join("\n");
+
+  return diff ? `${header}\n${diff}` : header;
+}
+
+function renderApplyPatchRecentChanges(summary: ApplyPatchSummary, theme: any): string {
+  const changes = summary.recentChanges ?? [];
+  if (changes.length === 0) return "";
+
+  const lines = changes.map((change) => theme.fg("toolOutput", formatApplyPatchChange(change)));
+  return [theme.fg("muted", "Completed"), ...lines].join("\n");
+}
+
+function renderApplyPatchPartialResult(summary: ApplyPatchSummary, expanded: boolean, theme: any) {
+  const status = theme.fg("muted", formatApplyPatchStatus(summary));
+  const active = renderApplyPatchCurrentDiff(summary, theme);
+  const completed = renderApplyPatchRecentChanges(summary, theme);
+  const hasExpandableContent = Boolean(active || completed);
+
+  if (!expanded) {
+    const hint = hasExpandableContent
+      ? theme.fg("muted", `(${keyHint("app.tools.expand", "to expand")})`)
+      : "";
+    return new Text([status, hint].filter(Boolean).join(" "), 0, 0);
+  }
+
+  const sections = [status, active, completed].filter(Boolean).join("\n\n");
+  const hint = hasExpandableContent
+    ? theme.fg("muted", keyHint("app.tools.expand", "to collapse"))
+    : "";
+  return new Text(hint ? `\n${sections}\n${hint}` : `\n${sections}`, 0, 0);
 }
 
 function renderApplyPatchResult(
@@ -118,18 +279,16 @@ function renderApplyPatchResult(
 
   if (!details) return new Text("", 0, 0);
 
-  const progress = options.isPartial ? formatApplyPatchProgress(details) : "";
+  if (options.isPartial || details.status === "running") {
+    return renderApplyPatchPartialResult(details, options.expanded, theme);
+  }
+
   const summary = formatApplyPatchBadge(details);
   const lines = details.changes.map((change) => formatApplyPatchChange(change));
   const hasExpandableContent = lines.length > 0;
 
   if (!options.expanded) {
-    const compact = [
-      progress ? theme.fg("muted", progress) : "",
-      summary ? theme.fg("muted", `[${summary}]`) : "",
-    ]
-      .filter(Boolean)
-      .join(" ");
+    const compact = [summary ? theme.fg("muted", `[${summary}]`) : ""].filter(Boolean).join(" ");
     const hint = hasExpandableContent
       ? theme.fg("muted", `(${keyHint("app.tools.expand", "to expand")})`)
       : "";
@@ -142,11 +301,7 @@ function renderApplyPatchResult(
   const expandedHint = hasExpandableContent
     ? theme.fg("muted", `(${keyHint("app.tools.expand", "to collapse")})`)
     : "";
-  const footer = [
-    progress ? theme.fg("muted", progress) : "",
-    summary ? theme.fg("muted", `[${summary}]`) : "",
-    expandedHint,
-  ]
+  const footer = [summary ? theme.fg("muted", `[${summary}]`) : "", expandedHint]
     .filter(Boolean)
     .join(" ");
   const withSummary = footer ? `${body}\n${footer}` : body;
@@ -300,8 +455,8 @@ export default function codexCompatExtension(pi: ExtensionAPI) {
     ],
     parameters: APPLY_PATCH_PARAMS,
     prepareArguments: normalizeApplyPatchArgs,
-    renderCall(args, theme) {
-      return renderApplyPatchCall(args, theme);
+    renderCall(args, theme, context) {
+      return renderApplyPatchCall(args, theme, context);
     },
     renderResult(result, options, theme) {
       return renderApplyPatchResult(result, options, theme);

@@ -4,6 +4,8 @@ import { withFileMutationQueue } from "@mariozechner/pi-coding-agent";
 import { resolveExistingPath, resolveMutationPath } from "./path-policy.js";
 
 export interface ApplyPatchSummary {
+  status?: "running" | "completed";
+  phase?: "preparing" | "applying" | "finalizing";
   added: string[];
   updated: string[];
   deleted: string[];
@@ -13,6 +15,12 @@ export interface ApplyPatchSummary {
   changes: ApplyPatchChange[];
   completedOperations: number;
   totalOperations: number;
+  activeOperation?: ApplyPatchChange["kind"];
+  currentFile?: string;
+  currentChunk?: number;
+  totalChunks?: number;
+  currentDiff?: string[];
+  recentChanges?: ApplyPatchChange[];
 }
 
 export interface ApplyPatchChange {
@@ -478,8 +486,68 @@ async function applyUpdate(cwd: string, operation: Extract<PatchOperation, { typ
   };
 }
 
+function formatChunkDiff(chunk: UpdateFileChunk): string[] {
+  const diff: string[] = [];
+
+  if (chunk.changeContext) {
+    diff.push(`@@ ${chunk.changeContext}`);
+  }
+
+  const sharedCount = Math.min(chunk.oldLines.length, chunk.newLines.length);
+  for (let index = 0; index < sharedCount; index += 1) {
+    const oldLine = chunk.oldLines[index];
+    const newLine = chunk.newLines[index];
+
+    if (oldLine === newLine) {
+      diff.push(` ${oldLine}`);
+      continue;
+    }
+
+    diff.push(`-${oldLine}`);
+    diff.push(`+${newLine}`);
+  }
+
+  for (let index = sharedCount; index < chunk.oldLines.length; index += 1) {
+    diff.push(`-${chunk.oldLines[index]}`);
+  }
+
+  for (let index = sharedCount; index < chunk.newLines.length; index += 1) {
+    diff.push(`+${chunk.newLines[index]}`);
+  }
+
+  if (chunk.isEndOfFile) {
+    diff.push("*** End of File");
+  }
+
+  return diff;
+}
+
+function trimPreviewLines(lines: string[], limit = 24): string[] {
+  if (lines.length <= limit) return lines;
+  return [...lines.slice(0, limit), `... (${lines.length - limit} more lines)`];
+}
+
+function formatAddPreview(content: string): string[] {
+  return trimPreviewLines(splitLogicalLines(content).map((line) => `+${line}`));
+}
+
+function formatDeletePreview(content: string): string[] {
+  const lines = splitLogicalLines(content);
+  const preview = trimPreviewLines(lines.map((line) => `-${line}`));
+  if (lines.length > 0) {
+    preview.unshift(`- ${lines.length} line${lines.length === 1 ? "" : "s"}`);
+  }
+  return preview;
+}
+
+function recentChanges(changes: ApplyPatchChange[], limit = 8): ApplyPatchChange[] {
+  return changes.slice(-limit);
+}
+
 function cloneApplyPatchSummary(summary: ApplyPatchSummary): ApplyPatchSummary {
   return {
+    status: summary.status,
+    phase: summary.phase,
     added: [...summary.added],
     updated: [...summary.updated],
     deleted: [...summary.deleted],
@@ -492,7 +560,44 @@ function cloneApplyPatchSummary(summary: ApplyPatchSummary): ApplyPatchSummary {
     })),
     completedOperations: summary.completedOperations,
     totalOperations: summary.totalOperations,
+    activeOperation: summary.activeOperation,
+    currentFile: summary.currentFile,
+    currentChunk: summary.currentChunk,
+    totalChunks: summary.totalChunks,
+    currentDiff: summary.currentDiff ? [...summary.currentDiff] : undefined,
+    recentChanges: summary.recentChanges
+      ? summary.recentChanges.map((change) => ({
+          ...change,
+          move: change.move ? { ...change.move } : undefined,
+        }))
+      : undefined,
   };
+}
+
+function setActiveProgress(
+  summary: ApplyPatchSummary,
+  operation: ApplyPatchChange["kind"],
+  path: string,
+  diff?: string[],
+  chunk?: { current?: number; total?: number },
+) {
+  summary.status = "running";
+  summary.phase = "applying";
+  summary.activeOperation = operation;
+  summary.currentFile = path;
+  summary.currentChunk = chunk?.current;
+  summary.totalChunks = chunk?.total;
+  summary.currentDiff = diff;
+  summary.recentChanges = recentChanges(summary.changes);
+}
+
+function clearActiveProgress(summary: ApplyPatchSummary) {
+  summary.activeOperation = undefined;
+  summary.currentFile = undefined;
+  summary.currentChunk = undefined;
+  summary.totalChunks = undefined;
+  summary.currentDiff = undefined;
+  summary.recentChanges = recentChanges(summary.changes);
 }
 
 async function notifyProgress(
@@ -522,6 +627,8 @@ export async function applyPatch(
 
   return withMutationQueuePaths(queuePaths, async () => {
     const summary: ApplyPatchSummary = {
+      status: "running",
+      phase: "preparing",
       added: [],
       updated: [],
       deleted: [],
@@ -531,10 +638,17 @@ export async function applyPatch(
       changes: [],
       completedOperations: 0,
       totalOperations: parsed.operations.length,
+      activeOperation: undefined,
+      recentChanges: [],
     };
+
+    await notifyProgress(onProgress, summary);
 
     for (const operation of parsed.operations) {
       if (operation.type === "add") {
+        setActiveProgress(summary, "add", operation.path, formatAddPreview(operation.content));
+        await notifyProgress(onProgress, summary);
+
         const added = await applyAdd(cwd, operation);
         summary.added.push(added);
         summary.linesAdded += operation.linesAdded;
@@ -545,11 +659,17 @@ export async function applyPatch(
           linesRemoved: 0,
         });
         summary.completedOperations += 1;
+        clearActiveProgress(summary);
         await notifyProgress(onProgress, summary);
         continue;
       }
 
       if (operation.type === "delete") {
+        const target = await resolveExistingPath(cwd, operation.path, "file");
+        const current = await readFile(target.canonicalPath, "utf8");
+        setActiveProgress(summary, "delete", target.inputPath, formatDeletePreview(current));
+        await notifyProgress(onProgress, summary);
+
         const result = await applyDelete(cwd, operation);
         summary.deleted.push(result.deleted);
         summary.linesRemoved += result.linesRemoved;
@@ -560,8 +680,29 @@ export async function applyPatch(
           linesRemoved: result.linesRemoved,
         });
         summary.completedOperations += 1;
+        clearActiveProgress(summary);
         await notifyProgress(onProgress, summary);
         continue;
+      }
+
+      setActiveProgress(summary, "update", operation.path, undefined, {
+        current: 0,
+        total: operation.chunks.length,
+      });
+      await notifyProgress(onProgress, summary);
+
+      for (let index = 0; index < operation.chunks.length; index += 1) {
+        setActiveProgress(
+          summary,
+          "update",
+          operation.path,
+          formatChunkDiff(operation.chunks[index]),
+          {
+            current: index + 1,
+            total: operation.chunks.length,
+          },
+        );
+        await notifyProgress(onProgress, summary);
       }
 
       const result = await applyUpdate(cwd, operation);
@@ -577,8 +718,14 @@ export async function applyPatch(
         linesRemoved: operation.linesRemoved,
       });
       summary.completedOperations += 1;
+      clearActiveProgress(summary);
       await notifyProgress(onProgress, summary);
     }
+
+    summary.phase = "finalizing";
+    await notifyProgress(onProgress, summary);
+    summary.status = "completed";
+    clearActiveProgress(summary);
 
     return summary;
   });
