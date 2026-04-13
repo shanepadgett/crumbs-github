@@ -20,6 +20,8 @@ const EXT_TO_STACK = new Map([
   [".jsx", "javascript"],
   [".ts", "typescript"],
   [".tsx", "typescript"],
+  [".go", "go"],
+  [".rs", "rust"],
 ]);
 
 const IGNORE_DIRS = new Set([
@@ -34,7 +36,15 @@ const IGNORE_DIRS = new Set([
   "DerivedData",
 ]);
 
-const counts = {};
+const counts = {
+  "swift-swiftui": 0,
+  java: 0,
+  kotlin: 0,
+  javascript: 0,
+  typescript: 0,
+  go: 0,
+  rust: 0,
+};
 
 function walk(dir) {
   for (const entry of readdirSync(dir, { withFileTypes: true })) {
@@ -47,15 +57,16 @@ function walk(dir) {
     if (!entry.isFile()) continue;
     const stack = EXT_TO_STACK.get(extname(entry.name).toLowerCase());
     if (!stack) continue;
-    counts[stack] = (counts[stack] ?? 0) + 1;
+    counts[stack] += 1;
   }
 }
 
 walk(targetDir);
 
 const detected = Object.entries(counts)
+  .filter(([, files]) => files > 0)
   .sort((a, b) => b[1] - a[1])
   .map(([stack, files]) => ({ stack, files }));
 
-writeFileSync(outputPath, `${JSON.stringify({ detected }, null, 2)}\n`, "utf-8");
+writeFileSync(outputPath, `${JSON.stringify({ counts, detected }, null, 2)}\n`, "utf-8");
 console.log(`Detected ${detected.length} language stacks`);
