@@ -71,7 +71,7 @@ Run deterministic root scan.
 ```bash
 ARTIFACT_ROOT=.agents/reviews/refactor-opportunities
 ROOT_SCAN_DIR="$ARTIFACT_ROOT/root-scan"
-node ./scripts/root-topology-scan.mjs \
+node scripts/root-topology-scan.mjs \
   . \
   "$ROOT_SCAN_DIR/root-topology.txt"
 ```
@@ -119,7 +119,7 @@ ARTIFACT_ROOT=.agents/reviews/refactor-opportunities
 RUN_ID=$(date -u +%Y-%m-%dT%H-%M-%SZ)
 RUN_DIR="$ARTIFACT_ROOT/runs/$RUN_ID"
 mkdir -p "$RUN_DIR"
-node ./scripts/collect-changed-files.mjs . "$RUN_DIR/changed-files.json"
+node scripts/collect-changed-files.mjs . "$RUN_DIR/changed-files.json"
 ```
 
 Read `changed-files.json`.
@@ -157,7 +157,7 @@ RUN_DIR="$ARTIFACT_ROOT/runs/$RUN_ID"
 MANIFEST="$RUN_DIR/run-manifest.json"
 mkdir -p "$RUN_DIR"
 TARGET_PATH="<confirmed-target>"
-node ./scripts/detect-languages.mjs \
+node scripts/detect-languages.mjs \
   "$TARGET_PATH" \
   "$RUN_DIR/detected-languages.json"
 ```
@@ -167,7 +167,7 @@ node ./scripts/detect-languages.mjs \
 Detect languages from changed-files manifest first.
 
 ```bash
-node ./scripts/detect-languages-from-files.mjs \
+node scripts/detect-languages-from-files.mjs \
   "$RUN_DIR/changed-files.json" \
   "$RUN_DIR/detected-languages.json"
 ```
@@ -208,7 +208,7 @@ If `scopeMode=changes`, include:
 - `contextRule`: unchanged files are support evidence only
 
 ```bash
-node ./scripts/init-run.mjs "$MANIFEST"
+node scripts/init-run.mjs "$MANIFEST"
 ```
 
 ## 7. Dispatch subagents
@@ -246,26 +246,26 @@ Prompt:
 
 Overlay rule: orchestrator picks overlays first. Subagent gets explicit paths. No overlay match -> lens criteria only.
 
-| Lens | Sections |
-|---|---|
-| hygiene | `references/hygiene/criteria.md` 1-7 |
+| Lens             | Sections                                      |
+| ---------------- | --------------------------------------------- |
+| hygiene          | `references/hygiene/criteria.md` 1-7          |
 | over-engineering | `references/over-engineering/criteria.md` 1-5 |
-| runtime | `references/runtime/criteria.md` 1-5 |
+| runtime          | `references/runtime/criteria.md` 1-5          |
 
-| Stack | Overlay |
-|---|---|
+| Stack           | Overlay                                 |
+| --------------- | --------------------------------------- |
 | Swift / SwiftUI | `references/languages/swift-swiftui.md` |
-| Java | `references/languages/java.md` |
-| Kotlin | `references/languages/kotlin.md` |
-| JavaScript | `references/languages/javascript.md` |
-| TypeScript | `references/languages/typescript.md` |
-| Go | none |
-| Rust | none |
+| Java            | `references/languages/java.md`          |
+| Kotlin          | `references/languages/kotlin.md`        |
+| JavaScript      | `references/languages/javascript.md`    |
+| TypeScript      | `references/languages/typescript.md`    |
+| Go              | none                                    |
+| Rust            | none                                    |
 
 ## 8. Validate raw findings
 
 ```bash
-node ./scripts/validate-findings.mjs "$RUN_DIR/findings"
+node scripts/validate-findings.mjs "$RUN_DIR/findings"
 ```
 
 Re-dispatch failed sections only.
@@ -273,14 +273,14 @@ Re-dispatch failed sections only.
 ## 9. Compile per lens
 
 ```bash
-node ./scripts/compile-lens-report.mjs "$RUN_DIR/findings/<lens>" "$RUN_DIR/compiled/<lens>.md" "<lens>"
+node scripts/compile-lens-report.mjs "$RUN_DIR/findings/<lens>" "$RUN_DIR/compiled/<lens>.md" "<lens>"
 ```
 
 ## 10. Normalize and detect conflicts
 
 ```bash
-node ./scripts/extract-issues.mjs "$RUN_DIR/normalized/issues.json" "$RUN_DIR/compiled"/*.md
-node ./scripts/detect-conflicts.mjs "$RUN_DIR/normalized/issues.json" "$RUN_DIR/normalized/conflict-candidates.json"
+node scripts/extract-issues.mjs "$RUN_DIR/normalized/issues.json" "$RUN_DIR/compiled"/*.md
+node scripts/detect-conflicts.mjs "$RUN_DIR/normalized/issues.json" "$RUN_DIR/normalized/conflict-candidates.json"
 ```
 
 ## 11. Verify findings accuracy
@@ -332,13 +332,13 @@ Guidance:
 ## 14. Validate reconciled findings
 
 ```bash
-node ./scripts/validate-findings.mjs "$RUN_DIR/reconciled-findings.md"
+node scripts/validate-findings.mjs "$RUN_DIR/reconciled-findings.md"
 ```
 
 ## 15. Scaffold and fill remediation plan
 
 ```bash
-node ./scripts/scaffold-remediation.mjs "$RUN_DIR/remediation-plan.md"
+node scripts/scaffold-remediation.mjs "$RUN_DIR/remediation-plan.md"
 ```
 
 Fill plan: group work units, order by deps then severity, cite source finding IDs, explain why units do not conflict, note strong churn warnings, defer unresolved conflicts.
@@ -348,7 +348,7 @@ Fill plan: group work units, order by deps then severity, cite source finding ID
 After plan is finalized, append accepted, deferred, rejected, or superseded architectural and refactor decisions to `history.jsonl`.
 
 ```bash
-node ./scripts/append-history.mjs \
+node scripts/append-history.mjs \
   "$RUN_DIR/history-entries.json" \
   "$ARTIFACT_ROOT/history.jsonl"
 ```
@@ -358,8 +358,8 @@ Append only terse entries useful for future churn checks.
 ## 17. Split and index
 
 ```bash
-node ./scripts/split-work-units.mjs "$RUN_DIR/remediation-plan.md" "$RUN_DIR/plans"
-node ./scripts/index-work-units.mjs "$RUN_DIR/plans" "$RUN_DIR/plans/index.json"
+node scripts/split-work-units.mjs "$RUN_DIR/remediation-plan.md" "$RUN_DIR/plans"
+node scripts/index-work-units.mjs "$RUN_DIR/plans" "$RUN_DIR/plans/index.json"
 ```
 
 ## 18. Final summary
@@ -382,16 +382,16 @@ If `scopeMode=changes`, also report reviewed changed-file count and unchanged fi
 
 ## Ownership
 
-| Step | Owner |
-|---|---|
-| setup, mode, dispatch, retries | orchestrator |
-| section findings | subagents |
-| validation, compile, parse, split, index | scripts |
-| findings verification | orchestrator or verification subagents |
-| conflict resolution | orchestrator or reconcile subagent |
-| churn check | cheap verifier subagent or orchestrator |
-| history append | orchestrator or script-fed append step |
-| remediation plan and summary | orchestrator |
+| Step                                     | Owner                                   |
+| ---------------------------------------- | --------------------------------------- |
+| setup, mode, dispatch, retries           | orchestrator                            |
+| section findings                         | subagents                               |
+| validation, compile, parse, split, index | scripts                                 |
+| findings verification                    | orchestrator or verification subagents  |
+| conflict resolution                      | orchestrator or reconcile subagent      |
+| churn check                              | cheap verifier subagent or orchestrator |
+| history append                           | orchestrator or script-fed append step  |
+| remediation plan and summary             | orchestrator                            |
 
 ## Guardrails
 
