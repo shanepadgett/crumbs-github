@@ -19,3 +19,5 @@ coverage/
 # Other Folders
 external/
 .pi/local/
+tmp/
+temp/
