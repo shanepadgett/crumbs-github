@@ -6,8 +6,7 @@
  * - Returns focused code/documentation context text for implementation-oriented questions.
  *
  * How to use it:
- * - This tool is primarily internal to `webresearch`.
- * - Set `CRUMBS_ENABLE_RAW_WEB_TOOLS=1` to expose it directly for debugging.
+ * - Use it directly when the current agent needs implementation-oriented context.
  *
  * Example:
  * - "Find real-world examples of React useEffect cleanup patterns"
@@ -24,7 +23,6 @@ import {
   WEBSEARCH_DEFAULT_TIMEOUT,
   withTruncation,
 } from "./shared/common.js";
-import { claimSearch } from "./shared/research-budget.js";
 import { assertUrlAllowed } from "./shared/permissions.js";
 
 const EXA_URL = "https://mcp.exa.ai/mcp";
@@ -105,6 +103,8 @@ export default function codeSearchExtension(pi: ExtensionAPI) {
     promptGuidelines: [
       "Use codesearch for API usage patterns, code examples, and implementation-oriented queries.",
       "Use websearch when you need broad discovery of pages before fetching.",
+      "Use codesearch for simple implementation lookups when you want examples or docs context without delegating a research task.",
+      "Do not use webresearch when a direct code/doc lookup is likely enough.",
     ],
     parameters: CODESEARCH_PARAMS,
     renderCall(args, theme) {
@@ -143,9 +143,6 @@ export default function codeSearchExtension(pi: ExtensionAPI) {
       await assertUrlAllowed(ctx.cwd, EXA_URL);
       const timeout = clampTimeout(params.timeout, WEBSEARCH_DEFAULT_TIMEOUT);
       const tokensNum = Math.max(500, Math.min(Math.floor(params.tokensNum ?? 5000), 20_000));
-
-      // codesearch shares the same search-class budget as websearch.
-      claimSearch(1);
 
       const body: CodeSearchRequest = {
         jsonrpc: "2.0",

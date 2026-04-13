@@ -6,8 +6,7 @@
  * - Returns concise search context text suitable for follow-up fetch/summarize steps.
  *
  * How to use it:
- * - This tool is primarily internal to `webresearch`.
- * - Set `CRUMBS_ENABLE_RAW_WEB_TOOLS=1` to expose it directly for debugging.
+ * - Use it directly when the current agent needs to discover relevant URLs.
  *
  * Example:
  * - "Search for Bun HTMLRewriter docs and show the most relevant results"
@@ -24,7 +23,6 @@ import {
   WEBSEARCH_DEFAULT_TIMEOUT,
   withTruncation,
 } from "./shared/common.js";
-import { claimSearch, maxCharsPerPage } from "./shared/research-budget.js";
 import { assertUrlAllowed } from "./shared/permissions.js";
 
 const EXA_URL = "https://mcp.exa.ai/mcp";
@@ -125,6 +123,8 @@ export default function webSearchExtension(pi: ExtensionAPI) {
     promptGuidelines: [
       "Use websearch before webfetch when you need to discover relevant URLs.",
       "Prefer targeted queries with entities (project name, doc page, version).",
+      "Use websearch for simple factual lookups like latest versions, release dates, and official doc URLs.",
+      "Do not use webresearch when one or two direct searches are likely enough.",
     ],
     parameters: WEBSEARCH_PARAMS,
     renderCall(args, theme) {
@@ -165,14 +165,10 @@ export default function webSearchExtension(pi: ExtensionAPI) {
       const timeout = clampTimeout(params.timeout, WEBSEARCH_DEFAULT_TIMEOUT);
       const mode = (params.type ?? "auto") as "auto" | "fast";
       const crawl = (params.livecrawl ?? "fallback") as "fallback" | "preferred";
-      const requestedCount = params.numResults ?? 8;
-      const count = claimSearch(requestedCount);
-      const cappedContextChars = maxCharsPerPage();
+      const count = Math.max(1, Math.min(Math.floor(params.numResults ?? 8), 12));
       const contextMaxCharacters = params.contextMaxCharacters
-        ? cappedContextChars
-          ? Math.min(params.contextMaxCharacters, cappedContextChars)
-          : params.contextMaxCharacters
-        : cappedContextChars;
+        ? Math.max(500, Math.min(Math.floor(params.contextMaxCharacters), 30_000))
+        : undefined;
 
       const body: SearchRequest = {
         jsonrpc: "2.0",

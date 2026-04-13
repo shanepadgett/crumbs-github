@@ -29,7 +29,6 @@ interface ProviderTierSpec {
 }
 
 export interface ResolveResearchModelInput {
-  explicitModel?: string;
   mode: ResearchMode;
   provider?: string;
   currentModelId?: string;
@@ -231,15 +230,6 @@ export async function resolveResearchModel(
   input: ResolveResearchModelInput,
 ): Promise<ResolveResearchModelResult> {
   const provider = normalizeProvider(input.provider);
-
-  if (input.explicitModel) {
-    return {
-      model: toCliModel(input.explicitModel, provider),
-      mode: input.mode,
-      reason: "explicit model override",
-      provider,
-    };
-  }
 
   const currentModel = input.currentModelId
     ? toCliModel(input.currentModelId, provider)

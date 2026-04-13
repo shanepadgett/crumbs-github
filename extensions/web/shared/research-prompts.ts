@@ -9,18 +9,12 @@
  * - Call `buildResearchSystemPrompt(...)` and `buildResearchTask(...)` from `research.ts`.
  *
  * Example:
- * - buildResearchTask({ task: "Compare A vs B", query: "A B benchmarks", ... })
+ * - buildResearchTask({ task: "Compare A vs B", responseShape: "4 bullets" })
  */
 
 export function buildResearchSystemPrompt(params: {
   agentName: string;
-  hasQuery: boolean;
-  hasUrls: boolean;
-  maxSearches: number;
-  maxFetches: number;
-  maxActions: number;
-  maxResults: number;
-  maxCharsPerPage: number;
+  researchMode: "fast" | "balanced" | "deep";
   citationStyle: "numeric" | "inline";
   responseShape: string;
 }): string {
@@ -42,29 +36,24 @@ Available tools:
 - webfetch: retrieve readable page content
 
 Operating rules:
-- Keep costs low and stay on-task.
+- Stay on-task and stop once you have enough evidence to answer well.
 - Never call any tool other than websearch/codesearch/webfetch.
-- Respect limits strictly:
-  - max search-class calls (websearch + codesearch): ${params.maxSearches}
-  - max webfetch calls: ${params.maxFetches}
-  - max total web actions: ${params.maxActions}
-  - max search results considered per search: ${params.maxResults}
-  - preferred max chars consumed per page: ${params.maxCharsPerPage}
 - Prioritize official docs, changelogs, specs, and primary sources.
 - If a source looks low quality or irrelevant, skip it.
 - Prefer a small number of high-signal fetches over many shallow fetches.
+- Research mode: ${params.researchMode}.
+  - fast: answer quickly, use focused evidence, avoid unnecessary digging.
+  - balanced: use normal diligence and verify important claims.
+  - deep: spend more effort validating claims, reconciling sources, and surfacing caveats.
 
 Workflow:
-${params.hasQuery ? "1) Start by searching with the provided query to identify the best candidates (use websearch for broad discovery, codesearch for implementation-focused context)." : "1) Skip search (no query provided)."}
-${params.hasUrls ? "2) Include provided URLs in the fetch queue when they look relevant." : "2) No explicit URLs provided."}
-3) Heuristic for tool choice:
+1) Start by searching for the best sources that answer the task.
+2) Heuristic for tool choice:
    - Prefer codesearch first when the task/query asks for API usage, code snippets, implementation patterns, or framework/library examples.
    - Prefer websearch first for broad discovery, news, high-level comparisons, or when you need to find canonical pages before fetching.
-4) Once you have enough promising candidates, switch from searching to fetching the best pages.
-5) If websearch/codesearch are blocked, stop searching and use remaining fetch budget on the strongest candidates.
-6) If webfetch is blocked, stop fetching and finalize from the evidence already gathered.
-7) If both budgets are exhausted or a finalization steer is sent, stop using tools and produce the final answer.
-8) Do exactly one final synthesis after all tool calls are complete.
+3) Once you have enough promising candidates, fetch the strongest pages.
+4) Continue only while additional searching or fetching is likely to materially improve the answer.
+5) Do exactly one final synthesis after all tool calls are complete.
 
 Output contract:
 - Follow this required response shape exactly:
@@ -77,24 +66,8 @@ ${params.responseShape}
 - ${citationRule}`;
 }
 
-export function buildResearchTask(params: {
-  task: string;
-  query?: string;
-  urls: string[];
-  maxSearches: number;
-  maxFetches: number;
-  maxActions: number;
-  maxResults: number;
-  maxCharsPerPage: number;
-  responseShape: string;
-}): string {
+export function buildResearchTask(params: { task: string; responseShape: string }): string {
   let text = `Research task:\n${params.task}`;
-  if (params.query) text += `\n\nSearch query:\n${params.query}`;
-  if (params.urls.length > 0) {
-    text += `\n\nSeed URLs:\n${params.urls.map((u, i) => `${i + 1}. ${u}`).join("\n")}`;
-  }
-
-  text += `\n\nExecution limits:\n- maxSearches: ${params.maxSearches}\n- maxFetches: ${params.maxFetches}\n- maxActions: ${params.maxActions}\n- maxResults: ${params.maxResults}\n- maxCharsPerPage: ${params.maxCharsPerPage}`;
   text += `\n\nRequired response shape:\n${params.responseShape}`;
   return text;
 }

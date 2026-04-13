@@ -46,7 +46,6 @@ export interface RunResearchAgentResult {
   fetches: number;
   elapsedMs: number;
   abortedBy?: "signal";
-  budgetExhausted?: true;
 }
 
 interface JsonEvent {
@@ -177,8 +176,6 @@ export async function runResearchAgent(
   let codeSearches = 0;
   let fetches = 0;
   let abortedBy: "signal" | undefined;
-  let budgetExhausted: true | undefined;
-
   options.onProgress?.({
     phase: "starting",
     activity: "starting",
@@ -271,22 +268,6 @@ export async function runResearchAgent(
         return;
       }
 
-      if (event.type === "message_end" && event.message?.role === "user") {
-        const text = messageText(event.message);
-        if (text.startsWith("Stop searching and fetching now.")) {
-          budgetExhausted = true;
-          emitProgress({
-            phase: "synthesizing",
-            activity: "synthesizing",
-            searches,
-            codeSearches,
-            fetches,
-            note: "",
-          });
-        }
-        return;
-      }
-
       if (event.type === "message_end" && event.message?.role === "assistant") {
         const text = assistantText(event.message);
         if (text.length > 0) finalOutput = text;
@@ -349,6 +330,5 @@ export async function runResearchAgent(
     fetches,
     elapsedMs: Date.now() - startedAt,
     abortedBy,
-    budgetExhausted,
   };
 }

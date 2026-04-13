@@ -12,14 +12,8 @@ export const WEBSEARCH_DEFAULT_TIMEOUT = 25;
 export const WEBRESEARCH_DEFAULT_TIMEOUT = 120;
 export const WEBTOOLS_MAX_TIMEOUT = 600;
 
-/**
- * Raw web tools (websearch/webfetch) are intended for internal webresearch use.
- * Set CRUMBS_ENABLE_RAW_WEB_TOOLS=1 to expose them in the parent agent for debugging.
- */
 export function shouldRegisterRawWebTools(): boolean {
-  return (
-    process.env.CRUMBS_WEBRESEARCH_CHILD === "1" || process.env.CRUMBS_ENABLE_RAW_WEB_TOOLS === "1"
-  );
+  return true;
 }
 
 export function clampTimeout(value: number | undefined, fallback: number): number {

@@ -28,7 +28,6 @@ import {
   WEBFETCH_MAX_BYTES,
   withTruncation,
 } from "./shared/common.js";
-import { claimFetch, maxCharsPerPage } from "./shared/research-budget.js";
 import { htmlToMarkdown, htmlToText } from "./shared/html.js";
 import { assertUrlAllowed } from "./shared/permissions.js";
 
@@ -63,6 +62,7 @@ export default function webFetchExtension(pi: ExtensionAPI) {
       "Use webfetch when you already have a URL and want direct page content.",
       "Use webfetch after identifying a concrete URL to inspect.",
       "Prefer markdown or text format for summarization and citation tasks.",
+      "Do not use webresearch when you already know the page to read and only need its contents.",
     ],
     parameters: WEBFETCH_PARAMS,
     renderCall(args, theme) {
@@ -103,8 +103,6 @@ export default function webFetchExtension(pi: ExtensionAPI) {
       const format = (params.format ?? "markdown") as "text" | "markdown" | "html";
       const timeout = clampTimeout(params.timeout, WEBFETCH_DEFAULT_TIMEOUT);
       const gate = buildAbort(timeout, signal);
-
-      claimFetch();
 
       try {
         let accept = "*/*";
@@ -188,13 +186,7 @@ export default function webFetchExtension(pi: ExtensionAPI) {
                 ? htmlToMarkdown(raw)
                 : raw;
 
-        const perPageCap = maxCharsPerPage();
-        const budgetedText =
-          perPageCap && text.length > perPageCap
-            ? `${text.slice(0, perPageCap)}\n\n[Per-page character cap reached (${perPageCap}).]`
-            : text;
-
-        const cut = withTruncation(budgetedText);
+        const cut = withTruncation(text);
         return {
           content: [{ type: "text", text: cut.text }],
           details: {
