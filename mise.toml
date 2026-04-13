@@ -11,7 +11,7 @@ run = "oxfmt --write \"extensions/**/*.ts\" \".pi/extensions/**/*.ts\""
 
 [tasks.lint-ts]
 description = "Lint TypeScript files with oxlint"
-run = "oxlint . --ignore-pattern 'node_modules/**' --ignore-pattern 'external/**' --ignore-pattern 'dist/**' --ignore-pattern '**/.*/**' --ignore-pattern '**/_hidden/**' --ignore-pattern 'extensions/permissions/**'"
+run = "oxlint . --ignore-pattern 'node_modules/**' --ignore-pattern 'external/**' --ignore-pattern 'dist/**' --ignore-pattern '**/.*/**' --ignore-pattern '**/_hidden/**'"
 
 [tasks.lint]
 description = "Run markdown and TypeScript lint tasks"

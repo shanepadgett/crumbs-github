@@ -15,6 +15,7 @@
   ],
   "type": "module",
   "dependencies": {
+    "@modelcontextprotocol/sdk": "1.29.0",
     "@mariozechner/pi-ai": "0.66.1",
     "@mariozechner/pi-tui": "0.66.1",
     "@sinclair/typebox": "0.34.49",

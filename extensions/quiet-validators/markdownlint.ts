@@ -1,6 +1,6 @@
 import { promises as fs } from "node:fs";
 import { join, relative } from "node:path";
-import type { ExtensionAPI, ExtensionContext } from "@mariozechner/pi-coding-agent";
+import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
 import {
   createFallbackFailureGroups,
   type FailureGroup,
@@ -47,7 +47,6 @@ const IGNORE_PATTERNS = [
   "out/**",
   "tmp/**",
   "**/_hidden/**",
-  "extensions/permissions/**",
 ];
 
 const RUNNERS = [

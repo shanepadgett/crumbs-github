@@ -17,12 +17,6 @@ export interface ActionResult {
   message: string;
 }
 
-function isPathWithinRoot(targetPath: string, root: string): boolean {
-  const rel = targetPath.startsWith(root) ? targetPath.slice(root.length) : undefined;
-  if (rel === undefined) return false;
-  return rel.length > 0 && rel.startsWith("/");
-}
-
 function rootFor(roots: SkillRoot[], store: SkillStore, scope: SkillScope): SkillRoot | undefined {
   return roots.find((root) => root.store === store && root.scope === scope);
 }
