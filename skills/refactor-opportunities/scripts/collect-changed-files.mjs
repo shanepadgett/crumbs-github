@@ -52,6 +52,49 @@ function parseNameStatusLine(line) {
   };
 }
 
+function parseStatusShortLine(line) {
+  if (!line.trim()) return null;
+
+  const indexStatus = line[0] ?? " ";
+  const worktreeStatus = line[1] ?? " ";
+  const remainder = line.slice(3);
+
+  if (indexStatus === "?" && worktreeStatus === "?") {
+    return {
+      path: remainder,
+      status: "?",
+      staged: false,
+      unstaged: true,
+      untracked: true,
+      deleted: false,
+      renamedFrom: null,
+    };
+  }
+
+  if (remainder.includes(" -> ")) {
+    const [renamedFrom, path] = remainder.split(" -> ");
+    return {
+      path,
+      status: indexStatus === "R" || worktreeStatus === "R" ? "R" : indexStatus || worktreeStatus,
+      staged: indexStatus !== " ",
+      unstaged: worktreeStatus !== " ",
+      untracked: false,
+      deleted: indexStatus === "D" || worktreeStatus === "D",
+      renamedFrom,
+    };
+  }
+
+  return {
+    path: remainder,
+    status: indexStatus !== " " ? indexStatus : worktreeStatus,
+    staged: indexStatus !== " ",
+    unstaged: worktreeStatus !== " ",
+    untracked: false,
+    deleted: indexStatus === "D" || worktreeStatus === "D",
+    renamedFrom: null,
+  };
+}
+
 function classifyExcluded(path) {
   if (!path) return null;
   const lower = path.toLowerCase();
@@ -99,10 +142,39 @@ for (const [source, raw] of [["staged", stagedRaw], ["unstaged", unstagedRaw]]) 
   }
 }
 
+for (const line of gitStatus.split("\n")) {
+  const parsed = parseStatusShortLine(line);
+  if (!parsed?.path) continue;
+
+  const entry = changedByPath.get(parsed.path) ?? {
+    path: parsed.path,
+    status: parsed.status,
+    staged: false,
+    unstaged: false,
+    untracked: false,
+    deleted: false,
+    renamedFrom: parsed.renamedFrom,
+  };
+
+  entry.status = entry.status === "?" ? parsed.status : entry.status || parsed.status;
+  entry.staged = entry.staged || parsed.staged;
+  entry.unstaged = entry.unstaged || parsed.unstaged;
+  entry.untracked = entry.untracked || parsed.untracked;
+  entry.deleted = entry.deleted || parsed.deleted;
+  entry.renamedFrom = entry.renamedFrom ?? parsed.renamedFrom ?? null;
+  changedByPath.set(parsed.path, entry);
+}
+
 const changedFiles = [];
 const excludedFiles = [];
+const deletedFiles = [];
 
 for (const entry of [...changedByPath.values()].sort((a, b) => a.path.localeCompare(b.path))) {
+  if (entry.deleted) {
+    deletedFiles.push(entry);
+    continue;
+  }
+
   const reason = classifyExcluded(entry.path);
   if (reason) {
     excludedFiles.push({ path: entry.path, reason, status: entry.status, renamedFrom: entry.renamedFrom });
@@ -116,9 +188,11 @@ const payload = {
   gitStatus,
   changedFiles,
   reviewedChangedFiles: changedFiles.map((entry) => entry.path),
+  deletedFiles,
   excludedFiles,
   counts: {
     changedFiles: changedFiles.length,
+    deletedFiles: deletedFiles.length,
     excludedFiles: excludedFiles.length,
   },
 };
