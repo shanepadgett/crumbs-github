@@ -83,6 +83,7 @@ interface CommitEvidence {
 interface CommitComplexity {
   score: number;
   complex: boolean;
+  reasons: string[];
 }
 
 interface PendingCommitRun {
@@ -260,6 +261,13 @@ function classifyCommitComplexity(evidence: CommitEvidence): CommitComplexity {
   const partialCount = evidence.files.filter((file) => isPartiallyStaged(file.entry)).length;
   const untrackedCount = evidence.files.filter((file) => isUntracked(file.entry)).length;
   const truncatedCount = evidence.files.filter(hasTruncatedEvidence).length;
+  const renameCount = evidence.files.filter((file) => !!file.entry.previousPath).length;
+  const deleteCount = evidence.files.filter(
+    (file) => file.entry.indexStatus === "D" || file.entry.worktreeStatus === "D",
+  ).length;
+  const conflictCount = evidence.files.filter(
+    (file) => file.entry.indexStatus === "U" || file.entry.worktreeStatus === "U",
+  ).length;
   const totalOriginalChars = evidence.files.reduce(
     (total, file) => total + getFileSliceOriginalChars(file),
     0,
@@ -272,18 +280,38 @@ function classifyCommitComplexity(evidence: CommitEvidence): CommitComplexity {
   const averageLinesPerFile = fileCount > 0 ? totalOriginalLines / fileCount : 0;
 
   const score =
-    fileCount * 1.2 +
-    Math.min(totalOriginalChars / 3_500, 8) +
-    Math.min(totalOriginalLines / 140, 8) +
-    Math.min(averageCharsPerFile / 2_200, 4) +
-    Math.min(averageLinesPerFile / 90, 4) +
+    fileCount +
+    Math.min(totalOriginalChars / 8_000, 6) +
+    Math.min(totalOriginalLines / 260, 6) +
     partialCount * 2.5 +
-    untrackedCount * 0.4 +
-    truncatedCount * 3.5;
+    renameCount * 1.5 +
+    deleteCount * 1.5 +
+    conflictCount * 4 +
+    truncatedCount * 2 +
+    Math.min(untrackedCount, 3) * 0.25;
+
+  const reasons: string[] = [];
+
+  if (conflictCount > 0) reasons.push("merge conflict present");
+  if (partialCount >= 2) reasons.push("multiple partially staged files");
+  if (truncatedCount >= 2) reasons.push("evidence truncated across multiple files");
+  if (fileCount >= 12) reasons.push("many changed files");
+  if (fileCount >= 8 && renameCount + deleteCount >= 3) {
+    reasons.push("broad structural churn across files");
+  }
+  if (fileCount >= 6 && (totalOriginalChars >= 18_000 || totalOriginalLines >= 500)) {
+    reasons.push("multi-file change with substantial diff volume");
+  }
+  if (fileCount >= 4 && (totalOriginalChars >= 40_000 || totalOriginalLines >= 1_200)) {
+    reasons.push("large diff spread across several files");
+  }
+
+  const complex = reasons.length > 0;
 
   return {
     score,
-    complex: score >= 9,
+    complex,
+    reasons,
   };
 }
 
@@ -615,6 +643,13 @@ export default function commitExtension(pi: ExtensionAPI): void {
       const targetModel = ctx.modelRegistry.find(
         complexity.complex ? COMPLEX_COMMIT_MODEL_PROVIDER : SIMPLE_COMMIT_MODEL_PROVIDER,
         targetModelId,
+      );
+
+      ctx.ui.notify(
+        complexity.complex
+          ? `Commit model: ${targetModelId} (${complexity.reasons.join(", ")}; score ${complexity.score.toFixed(1)})`
+          : `Commit model: ${targetModelId} (score ${complexity.score.toFixed(1)})`,
+        "info",
       );
 
       pendingRun = {
