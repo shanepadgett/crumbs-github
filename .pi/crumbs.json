@@ -9,8 +9,7 @@
         "~/.ssh/**",
         "~/.aws/**",
         "~/.gnupg/**",
-        "docs/_hidden/**",
-        "external/**"
+        "docs/_hidden/**"
       ],
       "injectPromptHint": true
     },
