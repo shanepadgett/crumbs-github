@@ -23,20 +23,37 @@ function abbreviateThinking(value: string): string {
   return value;
 }
 
-function renderModeIcons(theme: Theme, snapshot: StatusSnapshot): string | undefined {
-  const icons: string[] = [];
-  if (snapshot.fast === "on") icons.push(theme.fg("accent", "⚡"));
-  if (snapshot.cavemanMode === "minimal") icons.push(theme.fg("accent", "🗿"));
-  if (snapshot.cavemanMode === "improve") icons.push(theme.fg("accent", "🗿🔨"));
-  return icons.length > 0 ? icons.join(" ") : undefined;
-}
+function getModeSegments(
+  theme: Theme,
+  snapshot: StatusSnapshot,
+): {
+  rendered: string[];
+  plain: string[];
+} {
+  const rendered: string[] = [];
+  const plain: string[] = [];
 
-function getModeIconPlaceholder(snapshot: StatusSnapshot): string {
-  const icons: string[] = [];
-  if (snapshot.fast === "on") icons.push("⚡");
-  if (snapshot.cavemanMode === "minimal") icons.push("🗿");
-  if (snapshot.cavemanMode === "improve") icons.push("🗿🔨");
-  return icons.length > 0 ? icons.join(" ") : "—";
+  if (snapshot.focusMode !== "off") {
+    rendered.push(theme.fg("accent", `🎯 ${snapshot.focus}`));
+    plain.push(`🎯 ${snapshot.focus}`);
+  }
+
+  if (snapshot.fast === "on") {
+    rendered.push(theme.fg("accent", "⚡ fast"));
+    plain.push("⚡ fast");
+  }
+
+  if (snapshot.cavemanMode === "minimal") {
+    rendered.push(theme.fg("accent", "🗿"));
+    plain.push("🗿");
+  }
+
+  if (snapshot.cavemanMode === "improve") {
+    rendered.push(theme.fg("accent", "🗿🔨"));
+    plain.push("🗿🔨");
+  }
+
+  return { rendered, plain };
 }
 
 function dim(theme: Theme, value: string): string {
@@ -97,7 +114,6 @@ export function renderMinimalTable(
   width: number,
   snapshot: StatusSnapshot,
 ): string[] {
-  const iconValue = renderModeIcons(theme, snapshot);
   const pathValue = compactMinimalPath(snapshot.path);
   const branchValue = `${snapshot.branch} (${snapshot.git})`;
   const thinkingValue = abbreviateThinking(snapshot.thinking);
@@ -105,11 +121,10 @@ export function renderMinimalTable(
 
   const rightTextSegments: string[] = [];
   const rightPlainSegments: string[] = [];
+  const modes = getModeSegments(theme, snapshot);
 
-  if (iconValue) {
-    rightTextSegments.push(iconValue);
-    rightPlainSegments.push(getModeIconPlaceholder(snapshot));
-  }
+  rightTextSegments.push(...modes.rendered);
+  rightPlainSegments.push(...modes.plain);
 
   rightTextSegments.push(
     renderContextValue(theme, snapshot.contextSummary, snapshot.contextPercent),

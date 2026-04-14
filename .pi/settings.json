@@ -6,5 +6,15 @@
   "crumbs-caveman": {
     "enabled": true,
     "mode": "improve"
+  },
+  "crumbs-focus": {
+    "enabled": false,
+    "mode": "hidden",
+    "roots": []
+  },
+  "crumbs-focus-advanced": {
+    "enabled": false,
+    "mode": "hard",
+    "roots": []
   }
 }

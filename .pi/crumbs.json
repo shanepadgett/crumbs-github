@@ -11,7 +11,25 @@
         "~/.gnupg/**",
         "docs/_hidden/**"
       ],
-      "injectPromptHint": true
+      "injectPromptHint": true,
+      "focus": {
+        "enabled": false,
+        "mode": "hard",
+        "roots": [],
+        "alwaysAllow": [
+          ".pi/crumbs.json",
+          "schemas/crumbs.schema.json",
+          "AGENTS.md",
+          "package.json",
+          "mise.toml",
+          "README.md",
+          "docs/",
+          "node_modules/@mariozechner/pi-coding-agent",
+          "node_modules/@mariozechner/pi-ai",
+          "node_modules/@mariozechner/pi-tui",
+          "node_modules/@mariozechner/pi-agent-core"
+        ]
+      }
     },
     "quietMarkdownlint": {
       "excludeGlobs": [

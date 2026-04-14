@@ -34,6 +34,14 @@ export function renderFullTable(theme: Theme, width: number, snapshot: StatusSna
         snapshot.git === "clean" ? "success" : snapshot.git === "no git" ? "dim" : "warning",
     },
     { label: "branch", value: snapshot.branch },
+    {
+      label: "focus",
+      value: snapshot.focus,
+      renderedValue:
+        snapshot.focusMode === "off"
+          ? theme.fg("dim", "off")
+          : theme.fg("accent", `🎯 ${snapshot.focus}`),
+    },
     { label: "path", value: snapshot.path },
   ];
 

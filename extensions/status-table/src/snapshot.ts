@@ -21,6 +21,20 @@ function getCavemanDisplay(flags: StatusFlags): {
   return { label: "Me here", mode: "minimal" };
 }
 
+function getFocusDisplay(flags: StatusFlags): {
+  label: string;
+  mode: StatusSnapshot["focusMode"];
+} {
+  if (!flags.focusEnabled) {
+    return { label: "off", mode: "off" };
+  }
+
+  return {
+    label: flags.focusMode,
+    mode: flags.focusMode,
+  };
+}
+
 export function formatCompactNumber(value: number): string {
   if (!Number.isFinite(value) || value <= 0) return "0";
   if (value < 1000) return `${Math.round(value)}`;
@@ -157,6 +171,7 @@ export function buildSnapshot(
 ): StatusSnapshot {
   const { contextSummary, tokenSummary, percent: contextPercent } = formatContextUsage(ctx, totals);
   const caveman = getCavemanDisplay(flags);
+  const focus = getFocusDisplay(flags);
 
   return {
     git: git.summary,
@@ -168,6 +183,8 @@ export function buildSnapshot(
     fast: flags.fastEnabled ? "on" : "off",
     caveman: caveman.label,
     cavemanMode: caveman.mode,
+    focus: focus.label,
+    focusMode: focus.mode,
     contextSummary,
     tokenSummary,
     contextPercent,

@@ -22,6 +22,8 @@ export type StatusSnapshot = {
   fast: string;
   caveman: string;
   cavemanMode: "off" | CavemanMode;
+  focus: string;
+  focusMode: "off" | FocusMode;
   contextSummary: string;
   tokenSummary: string;
   contextPercent: number | undefined;
@@ -33,11 +35,14 @@ export type SessionTokenTotals = {
 };
 
 export type CavemanMode = "minimal" | "improve";
+export type FocusMode = "soft" | "hidden" | "hard";
 
 export type StatusFlags = {
   fastEnabled: boolean;
   cavemanEnabled: boolean;
   cavemanMode: CavemanMode;
+  focusEnabled: boolean;
+  focusMode: FocusMode;
 };
 
 export type Cell = {

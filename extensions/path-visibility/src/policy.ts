@@ -1,14 +1,23 @@
 import { promises as fs } from "node:fs";
 import { isAbsolute, relative, resolve } from "node:path";
-import { loadPathVisibilityConfig, normalizePath } from "./settings.js";
+import {
+  loadPathVisibilityConfig,
+  normalizePath,
+  type FocusConfig,
+  type FocusMode,
+} from "./settings.js";
 
 export interface PathVisibilityPolicy {
   enabled: boolean;
   injectPromptHint: boolean;
-  deny: string[];
-  isDenied: (targetPath: string) => Promise<boolean>;
-  referencesDeniedPath: (command: string) => Promise<boolean>;
-  sanitizeBashContent: (content: unknown) => unknown[] | null;
+  hardDeny: string[];
+  focus: FocusConfig;
+  isHardDenied: (targetPath: string) => Promise<boolean>;
+  isOutsideFocus: (targetPath: string) => Promise<boolean>;
+  referencesHardDeniedPath: (command: string) => Promise<boolean>;
+  referencesOutsideFocusPath: (command: string) => Promise<boolean>;
+  rewriteBashCommand: (command: string) => string;
+  sanitizeBashContent: (content: unknown) => unknown | null;
 }
 
 interface PathRule {
@@ -19,6 +28,7 @@ interface PathRule {
 const FILESYSTEM_COMMAND_RE =
   /\b(ls|find|fd|fdfind|rg|grep|tree|cat|bat|head|tail|less|more|sed|awk)\b/;
 const COMPLEX_SHELL_RE = /\|\||&&|[|;`]|\$\(|\bxargs\b|\beval\b/;
+const FOCUSABLE_DISCOVERY_TOOLS = new Set(["find", "rg", "ls", "tree", "fd", "fdfind"]);
 
 function escapeRegex(value: string): string {
   return value.replace(/[|\\{}()[\]^$+?.]/g, "\\$&");
@@ -82,6 +92,10 @@ function tokenizeShell(command: string): string[] {
   return matches.map((token) => token.replace(/^['"]|['"]$/g, ""));
 }
 
+function shellQuote(value: string): string {
+  return `'${value.replaceAll("'", `'\\''`)}'`;
+}
+
 function looksLikePathToken(token: string): boolean {
   if (!token || token.startsWith("-")) return false;
   return (
@@ -92,6 +106,15 @@ function looksLikePathToken(token: string): boolean {
 function shouldInspectToken(tool: string, token: string): boolean {
   if (["cat", "bat", "head", "tail", "less", "more"].includes(tool)) return !token.startsWith("-");
   return looksLikePathToken(token);
+}
+
+function isBroadPathToken(token: string): boolean {
+  const value = token.trim();
+  return value === "." || value === "./" || value === "/" || value === "~" || value === "~/";
+}
+
+function getPathArgs(tool: string, tokens: string[]): string[] {
+  return tokens.slice(1).filter((token) => shouldInspectToken(tool, token));
 }
 
 function pathIsOrContains(pathValue: string, candidate: string): boolean {
@@ -117,21 +140,46 @@ function isComplexBash(command: string): boolean {
   return COMPLEX_SHELL_RE.test(command);
 }
 
-export function maybeRewriteBashCommand(command: string, deny: string[]): string {
+function isPathLikeLine(line: string): boolean {
+  const trimmed = line.trim();
+  if (!trimmed) return false;
+  if (/\s{2,}|\t/.test(trimmed)) return false;
+  if (trimmed.includes(" ")) return false;
+  return (
+    trimmed.includes("/") ||
+    trimmed.startsWith(".") ||
+    trimmed.startsWith("~") ||
+    /^[^\s]+\.[^\s]+$/.test(trimmed) ||
+    /^[A-Za-z0-9._-]+$/.test(trimmed)
+  );
+}
+
+function normalizeFocus(config: FocusConfig): FocusConfig {
+  return {
+    enabled: config.enabled,
+    mode: config.mode,
+    roots: config.roots.map((value) => normalizePath(value.trim())).filter(Boolean),
+    alwaysAllow: config.alwaysAllow.map((value) => normalizePath(value.trim())).filter(Boolean),
+  };
+}
+
+function rewriteBashCommand(command: string, hardDeny: string[], focus: FocusConfig): string {
   const trimmed = command.trim();
   const tokens = tokenizeShell(trimmed);
   const tool = tokens[0];
   if (!tool || isComplexBash(trimmed)) return command;
 
-  const relativeGlobs = deny
+  const relativeGlobs = hardDeny
     .map((item) => normalizeGlob(item))
     .filter(
       (item) => item && !item.startsWith("/") && !item.startsWith("~/") && !item.includes(" "),
     );
 
+  let next = command;
+
   if (tool === "rg" && relativeGlobs.length > 0) {
     const suffix = relativeGlobs.map((glob) => ` --glob '!${glob}'`).join("");
-    return `${command}${suffix}`;
+    next = `${next}${suffix}`;
   }
 
   if (tool === "find" && relativeGlobs.length > 0) {
@@ -140,13 +188,52 @@ export function maybeRewriteBashCommand(command: string, deny: string[]): string
       .filter(Boolean)
       .map((prefix) => ` -not -path './${prefix}*' -not -path '${prefix}*'`)
       .join("");
-    return `${command}${excluded}`;
+    next = `${next}${excluded}`;
   }
 
-  return command;
+  const focusActive = focus.enabled && focus.roots.length > 0;
+  if (!focusActive || focus.mode === "soft") return next;
+  if (!FOCUSABLE_DISCOVERY_TOOLS.has(tool)) return next;
+
+  const pathArgs = getPathArgs(tool, tokens);
+  if (pathArgs.some((arg) => !isBroadPathToken(arg))) return next;
+
+  const quotedRoots = focus.roots.map((root) => shellQuote(root));
+  if (quotedRoots.length === 0) return next;
+
+  if (tool === "find") {
+    const rest = trimmed.replace(/^find\b\s*/, "");
+    const restWithoutBroadPrefix = rest.replace(/^(\.\/?|\/|~\/?)(\s+|$)/, "$2");
+    return `find ${quotedRoots.join(" ")} ${restWithoutBroadPrefix}`.trim();
+  }
+
+  return `${next}${quotedRoots.map((root) => ` ${root}`).join("")}`;
 }
 
-function sanitizeBashOutput(content: unknown, pathTokens: string[]): unknown[] | null {
+function sanitizeBashOutput(
+  content: unknown,
+  hardDenyTokens: string[],
+  focusAllowTokens: string[],
+  focusMode: FocusMode,
+): unknown | null {
+  const shouldHideLine = (line: string): boolean => {
+    const normalized = normalizePath(line);
+    const hiddenByHardDeny = hardDenyTokens.some((token) => token && normalized.includes(token));
+    const hideByFocus =
+      focusMode !== "soft" &&
+      focusAllowTokens.length > 0 &&
+      isPathLikeLine(line) &&
+      !focusAllowTokens.some((token) => token && normalized.includes(token));
+    return hiddenByHardDeny || hideByFocus;
+  };
+
+  if (typeof content === "string") {
+    const lines = content.split(/\r?\n/);
+    const filtered = lines.filter((line) => !shouldHideLine(line));
+    if (filtered.length === lines.length) return null;
+    return filtered.length > 0 ? filtered.join("\n") : "No matching files.";
+  }
+
   if (!Array.isArray(content)) return null;
 
   let changed = false;
@@ -158,8 +245,7 @@ function sanitizeBashOutput(content: unknown, pathTokens: string[]): unknown[] |
     const originalLines = typed.text.split(/\r?\n/);
     let partChanged = false;
     const filtered = originalLines.filter((line) => {
-      const normalized = normalizePath(line);
-      const hidden = pathTokens.some((token) => token && normalized.includes(token));
+      const hidden = shouldHideLine(line);
       if (hidden) {
         changed = true;
         partChanged = true;
@@ -180,23 +266,120 @@ function sanitizeBashOutput(content: unknown, pathTokens: string[]): unknown[] |
 }
 
 export function buildPromptHint(deny: string[]): string {
+  if (deny.length === 0) return "";
   const listed = deny
     .slice(0, 12)
     .map((entry) => `- ${entry}`)
     .join("\n");
   return [
-    "Path visibility policy:",
-    "Do not access or reference denied paths.",
-    "Denied patterns:",
+    "Path visibility hard policy:",
+    "Never access or reference hard-denied paths.",
+    "Hard-denied patterns:",
     listed,
   ].join("\n");
 }
 
-export async function createPathVisibilityPolicy(cwd: string): Promise<PathVisibilityPolicy> {
-  const config = await loadPathVisibilityConfig(cwd);
-  const deny = config.deny.map((item) => normalizePath(item.trim())).filter(Boolean);
+function buildFocusPromptHint(focus: FocusConfig): string {
+  if (!focus.enabled || focus.roots.length === 0) return "";
 
-  const rules = deny
+  const modeInstruction =
+    focus.mode === "soft"
+      ? "Focus mode soft: stay inside focus roots unless direct evidence proves boundary missing."
+      : focus.mode === "hidden"
+        ? "Focus mode hidden: stay inside focus roots; avoid outside exploration unless direct dependency requires it."
+        : "Focus mode hard: do not access paths outside focus roots or always-allow list.";
+
+  const roots =
+    focus.roots
+      .slice(0, 12)
+      .map((item) => `- ${item}`)
+      .join("\n") || "- (none)";
+  const allow =
+    focus.alwaysAllow
+      .slice(0, 12)
+      .map((item) => `- ${item}`)
+      .join("\n") || "- (none)";
+
+  return [
+    "Focus policy:",
+    modeInstruction,
+    "Focus roots:",
+    roots,
+    "Always-allow paths:",
+    allow,
+  ].join("\n");
+}
+
+function dedupe(values: string[]): string[] {
+  return [...new Set(values.filter(Boolean))];
+}
+
+type PrefixRule = { value: string; absolute: boolean };
+
+function toPrefixRule(input: string): PrefixRule | null {
+  const expanded = expandHome(input);
+  const stripped = normalizePath(stripGlobSuffix(expanded));
+  if (!stripped) return null;
+  return { value: stripped, absolute: isAbsolute(stripped) };
+}
+
+async function pathMatchesPrefixRules(
+  cwd: string,
+  targetPath: string,
+  rules: PrefixRule[],
+): Promise<boolean> {
+  if (rules.length === 0) return false;
+
+  const normalizedTarget = normalizePath(targetPath);
+  const absoluteTarget = isAbsolute(normalizedTarget)
+    ? normalizedTarget
+    : normalizePath(resolve(cwd, normalizedTarget));
+  const realTarget = await resolveRealPath(absoluteTarget);
+  const relativeAbs = normalizePath(relative(cwd, absoluteTarget)).replace(/^\.\//, "");
+  const relativeReal = normalizePath(relative(cwd, realTarget)).replace(/^\.\//, "");
+
+  for (const rule of rules) {
+    if (rule.absolute) {
+      if (
+        pathIsOrContains(absoluteTarget, rule.value) ||
+        pathIsOrContains(realTarget, rule.value)
+      ) {
+        return true;
+      }
+      continue;
+    }
+
+    if (
+      (relativeAbs &&
+        !relativeAbs.startsWith("../") &&
+        pathIsOrContains(relativeAbs, rule.value)) ||
+      (relativeReal &&
+        !relativeReal.startsWith("../") &&
+        pathIsOrContains(relativeReal, rule.value)) ||
+      pathIsOrContains(normalizedTarget.replace(/^\.\//, ""), rule.value)
+    ) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+export async function createPathVisibilityPolicy(
+  cwd: string,
+  options?: { focusOverride?: Partial<FocusConfig> },
+): Promise<PathVisibilityPolicy> {
+  const config = await loadPathVisibilityConfig(cwd);
+  const hardDeny = config.hardDeny.map((item) => normalizePath(item.trim())).filter(Boolean);
+  const override = options?.focusOverride;
+  const focus = normalizeFocus({
+    enabled: override?.enabled ?? config.focus.enabled,
+    mode: override?.mode ?? config.focus.mode,
+    roots: override?.roots ?? config.focus.roots,
+    alwaysAllow: override?.alwaysAllow ?? config.focus.alwaysAllow,
+  });
+
+  const rules = hardDeny
     .map((pattern) => normalizeRule(pattern))
     .filter((rule) => rule.normalized.length > 0)
     .map<PathRule>((rule) => {
@@ -206,12 +389,18 @@ export async function createPathVisibilityPolicy(cwd: string): Promise<PathVisib
       return { regex: globToRegExp(rule.normalized), absolute: false };
     });
 
-  const pathPrefixes = deny
+  const hardDenyPrefixes = hardDeny
     .map((pattern) => stripGlobSuffix(expandHome(pattern)))
     .map((token) => normalizePath(token))
     .filter((token) => token.length > 0);
 
-  async function isDenied(targetPath: string): Promise<boolean> {
+  const focusRules = dedupe([...focus.roots, ...focus.alwaysAllow])
+    .map((value) => toPrefixRule(value))
+    .filter((value): value is PrefixRule => Boolean(value));
+
+  const focusActive = focus.enabled && focus.roots.length > 0;
+
+  async function isHardDenied(targetPath: string): Promise<boolean> {
     const normalizedTarget = normalizePath(targetPath);
     const absoluteTarget = isAbsolute(normalizedTarget)
       ? normalizedTarget
@@ -226,8 +415,8 @@ export async function createPathVisibilityPolicy(cwd: string): Promise<PathVisib
         if (
           rule.regex.test(absoluteTarget) ||
           rule.regex.test(realTarget) ||
-          pathPrefixes.some((prefix) => pathIsOrContains(absoluteTarget, prefix)) ||
-          pathPrefixes.some((prefix) => pathIsOrContains(realTarget, prefix))
+          hardDenyPrefixes.some((prefix) => pathIsOrContains(absoluteTarget, prefix)) ||
+          hardDenyPrefixes.some((prefix) => pathIsOrContains(realTarget, prefix))
         ) {
           return true;
         }
@@ -240,10 +429,10 @@ export async function createPathVisibilityPolicy(cwd: string): Promise<PathVisib
         rule.regex.test(normalizedTarget.replace(/^\.\//, "")) ||
         (relativeAbs &&
           !relativeAbs.startsWith("../") &&
-          pathPrefixes.some((prefix) => pathIsOrContains(relativeAbs, prefix))) ||
+          hardDenyPrefixes.some((prefix) => pathIsOrContains(relativeAbs, prefix))) ||
         (relativeReal &&
           !relativeReal.startsWith("../") &&
-          pathPrefixes.some((prefix) => pathIsOrContains(relativeReal, prefix)))
+          hardDenyPrefixes.some((prefix) => pathIsOrContains(relativeReal, prefix)))
       ) {
         return true;
       }
@@ -252,29 +441,71 @@ export async function createPathVisibilityPolicy(cwd: string): Promise<PathVisib
     return false;
   }
 
-  async function referencesDeniedPath(command: string): Promise<boolean> {
+  async function isOutsideFocus(targetPath: string): Promise<boolean> {
+    if (!focusActive) return false;
+    const inside = await pathMatchesPrefixRules(cwd, targetPath, focusRules);
+    return !inside;
+  }
+
+  async function referencesHardDeniedPath(command: string): Promise<boolean> {
     const tokens = tokenizeShell(command);
     const tool = tokens[0] ?? "";
     if (!tool || !FILESYSTEM_COMMAND_RE.test(tool)) return false;
 
     for (const token of tokens.slice(1)) {
       if (!shouldInspectToken(tool, token)) continue;
-      if (await isDenied(token)) return true;
+      if (await isHardDenied(token)) return true;
     }
 
     return false;
   }
 
-  const outputTokens = [
-    ...new Set([...pathPrefixes, ...pathPrefixes.map((prefix) => basenameToken(prefix))]),
+  async function referencesOutsideFocusPath(command: string): Promise<boolean> {
+    if (!focusActive) return false;
+
+    const tokens = tokenizeShell(command);
+    const tool = tokens[0] ?? "";
+    if (!tool || !FILESYSTEM_COMMAND_RE.test(tool)) return false;
+
+    for (const token of tokens.slice(1)) {
+      if (!shouldInspectToken(tool, token)) continue;
+      if (await isOutsideFocus(token)) return true;
+    }
+
+    return false;
+  }
+
+  const hardDenyOutputTokens = [
+    ...new Set([...hardDenyPrefixes, ...hardDenyPrefixes.map((prefix) => basenameToken(prefix))]),
   ].filter(Boolean);
+
+  const focusOutputTokens = [
+    ...new Set(
+      (focusActive ? [...focus.roots, ...focus.alwaysAllow] : []).map((item) =>
+        stripGlobSuffix(item),
+      ),
+    ),
+  ]
+    .map((item) => normalizePath(item))
+    .filter(Boolean);
 
   return {
     enabled: config.enabled,
     injectPromptHint: config.injectPromptHint,
-    deny,
-    isDenied,
-    referencesDeniedPath,
-    sanitizeBashContent: (content: unknown) => sanitizeBashOutput(content, outputTokens),
+    hardDeny,
+    focus,
+    isHardDenied,
+    isOutsideFocus,
+    referencesHardDeniedPath,
+    referencesOutsideFocusPath,
+    rewriteBashCommand: (command: string) => rewriteBashCommand(command, hardDeny, focus),
+    sanitizeBashContent: (content: unknown) =>
+      sanitizeBashOutput(content, hardDenyOutputTokens, focusOutputTokens, focus.mode),
   };
+}
+
+export function buildCombinedPromptHint(policy: PathVisibilityPolicy): string {
+  const hardHint = buildPromptHint(policy.hardDeny);
+  const focusHint = buildFocusPromptHint(policy.focus);
+  return [hardHint, focusHint].filter(Boolean).join("\n\n");
 }

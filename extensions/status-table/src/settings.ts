@@ -1,7 +1,12 @@
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
-import { CAVEMAN_SETTINGS_KEY, FAST_SETTINGS_KEY, STATUS_TABLE_SETTINGS_KEY } from "./constants.js";
+import {
+  CAVEMAN_SETTINGS_KEY,
+  FAST_SETTINGS_KEY,
+  FOCUS_ADV_SETTINGS_KEY,
+  STATUS_TABLE_SETTINGS_KEY,
+} from "./constants.js";
 import type { SettingsObject, StatusFlags, StatusTableMode, StatusTablePrefs } from "./types.js";
 
 const DEFAULT_PREFS: StatusTablePrefs = {
@@ -72,6 +77,11 @@ function normalizeCavemanMode(value: unknown): "minimal" | "improve" {
   return value === "improve" ? "improve" : "minimal";
 }
 
+function normalizeFocusMode(value: unknown): "soft" | "hidden" | "hard" {
+  if (value === "soft" || value === "hidden" || value === "hard") return value;
+  return "hidden";
+}
+
 function readEnabledSetting(settings: SettingsObject, key: string): boolean {
   const section = asObject(settings[key]);
   return typeof section?.["enabled"] === "boolean" ? (section["enabled"] as boolean) : false;
@@ -93,11 +103,14 @@ export async function loadStatusTablePrefs(cwd: string): Promise<StatusTablePref
 export async function loadStatusFlags(cwd: string): Promise<StatusFlags> {
   const settings = await readEffectiveSettings(cwd);
   const cavemanSection = asObject(settings[CAVEMAN_SETTINGS_KEY]);
+  const focusSection = asObject(settings[FOCUS_ADV_SETTINGS_KEY]);
 
   return {
     fastEnabled: readEnabledSetting(settings, FAST_SETTINGS_KEY),
     cavemanEnabled: readEnabledSetting(settings, CAVEMAN_SETTINGS_KEY),
     cavemanMode: normalizeCavemanMode(cavemanSection?.["mode"]),
+    focusEnabled: typeof focusSection?.["enabled"] === "boolean" ? !!focusSection.enabled : false,
+    focusMode: normalizeFocusMode(focusSection?.["mode"]),
   };
 }
 

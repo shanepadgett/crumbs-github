@@ -3,6 +3,7 @@ import { GIT_REFRESH_INTERVAL_MS, WIDGET_KEY } from "./constants.js";
 import {
   CRUMBS_EVENT_CAVEMAN_CHANGED,
   CRUMBS_EVENT_FAST_CHANGED,
+  CRUMBS_EVENT_FOCUS_ADV_CHANGED,
   CRUMBS_EVENT_THINKING_CHANGED,
 } from "../../shared/crumbs-events.js";
 import { loadGitSummary } from "./git.js";
@@ -35,6 +36,10 @@ type CavemanFlagEvent = StatusFlagEvent & {
   mode?: "minimal" | "improve";
 };
 
+type FocusFlagEvent = StatusFlagEvent & {
+  mode?: "off" | "soft" | "hidden" | "hard";
+};
+
 function asStatusFlagEvent(value: unknown): StatusFlagEvent {
   if (!value || typeof value !== "object") return {};
 
@@ -65,11 +70,30 @@ function asCwdEvent(value: unknown): { cwd?: string } {
   };
 }
 
+function asFocusFlagEvent(value: unknown): FocusFlagEvent {
+  if (!value || typeof value !== "object") return {};
+
+  const record = value as Record<string, unknown>;
+  return {
+    cwd: typeof record.cwd === "string" ? record.cwd : undefined,
+    enabled: typeof record.enabled === "boolean" ? record.enabled : undefined,
+    mode:
+      record.mode === "off" ||
+      record.mode === "soft" ||
+      record.mode === "hidden" ||
+      record.mode === "hard"
+        ? record.mode
+        : undefined,
+  };
+}
+
 const DEFAULT_PREFS: StatusTablePrefs = { enabled: true, mode: "full" };
 const DEFAULT_FLAGS: StatusFlags = {
   fastEnabled: false,
   cavemanEnabled: false,
   cavemanMode: "minimal",
+  focusEnabled: false,
+  focusMode: "hidden",
 };
 const DEFAULT_TOKEN_TOTALS: SessionTokenTotals = { input: 0, output: 0 };
 const DEFAULT_GIT: GitSummary = { branch: "no git", summary: "no git" };
@@ -250,6 +274,17 @@ export default function statusTableExtension(pi: ExtensionAPI): void {
     refreshUI(ctx);
   }
 
+  function applyFocusEvent(ctx: ExtensionContext | undefined, event: FocusFlagEvent): void {
+    if (!ctx) return;
+    if (event.cwd && event.cwd !== ctx.cwd) return;
+
+    const flags = getWorkspaceState(ctx.cwd).flags;
+    if (typeof event.enabled === "boolean") flags.focusEnabled = event.enabled;
+    if (event.mode && event.mode !== "off") flags.focusMode = event.mode;
+    if (event.mode === "off") flags.focusEnabled = false;
+    refreshUI(ctx);
+  }
+
   async function hydrateContext(ctx: ExtensionContext): Promise<void> {
     await ensurePrefs(ctx.cwd);
     await refreshFlags(ctx.cwd);
@@ -270,6 +305,10 @@ export default function statusTableExtension(pi: ExtensionAPI): void {
     if (!lastContext) return;
     if (cwdEvent.cwd && cwdEvent.cwd !== lastContext.cwd) return;
     refreshUI(lastContext);
+  });
+
+  pi.events.on(CRUMBS_EVENT_FOCUS_ADV_CHANGED, (event) => {
+    applyFocusEvent(lastContext, asFocusFlagEvent(event));
   });
 
   pi.registerCommand("status-table", {
