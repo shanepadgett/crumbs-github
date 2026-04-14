@@ -2,24 +2,22 @@
  * Deterministic Commit Command Extension
  *
  * What this does:
- * - Adds a `/commit` command that snapshots git status, summaries, and focused
- *   per-file diffs before the model starts working.
- * - Injects those instructions and that evidence into the commit turn so the
- *   model can usually decide commit boundaries without first rediscovering the
- *   repository state.
- * - Guides the model to group semantically related edits together and split
- *   independent work into separate commits when that makes review/revert safer.
+ * - Adds a `/commit` command that snapshots git status, summaries, focused diffs,
+ *   and a simple commit complexity score before the model starts working.
+ * - Switches `/commit` to a lighter or stronger model based on the relative size
+ *   and complexity of the evidence bundle, then restores the prior model after the run.
+ * - Injects deterministic commit evidence so the model can group changes into
+ *   semantic commits without re-inspecting the repository.
  *
  * How to use:
  * - Run `/commit` from inside a git repository with uncommitted changes.
- * - The extension gathers a deterministic evidence packet and asks the agent to
- *   create one or more semantic commits.
+ * - The extension gathers commit evidence, selects a `/commit` model profile,
+ *   and asks the agent to create one or more semantic commits.
  *
  * Example:
  * - Update a feature, adjust docs, and include an unrelated refactor.
  * - Run `/commit`.
- * - The agent should keep the feature + docs together and split the unrelated
- *   refactor into its own commit.
+ * - The agent should split those edits into the smallest clear semantic commits.
  */
 
 import type { ExtensionAPI, ExtensionCommandContext } from "@mariozechner/pi-coding-agent";
@@ -27,6 +25,11 @@ import type { ExtensionAPI, ExtensionCommandContext } from "@mariozechner/pi-cod
 const COMMAND_DESCRIPTION = "Create semantic git commit groupings from deterministic git evidence";
 const COMMIT_TRIGGER_MESSAGE =
   "Create the git commit(s) from the injected /commit context only. First state the commit chunks you intend to make, then make them. Do not run repository inspection commands.";
+const SIMPLE_COMMIT_MODEL_PROVIDER = "openai-codex";
+const SIMPLE_COMMIT_MODEL_ID = "gpt-5.4-mini";
+const COMPLEX_COMMIT_MODEL_PROVIDER = "openai-codex";
+const COMPLEX_COMMIT_MODEL_ID = "gpt-5.4";
+const COMMIT_THINKING_LEVEL = "medium";
 const COMMAND_TIMEOUT_MS = 15_000;
 const DIFF_CONTEXT_LINES = 1;
 const MAX_SUMMARY_CHARS = 4_000;
@@ -75,6 +78,18 @@ interface CommitEvidence {
   stagedSummary: string;
   unstagedSummary: string;
   diffBudgetRemainingChars: number;
+}
+
+interface CommitComplexity {
+  score: number;
+  complex: boolean;
+}
+
+interface PendingCommitRun {
+  prompt: string;
+  restoreModelProvider?: string;
+  restoreModelId?: string;
+  restoreThinkingLevel: "off" | "minimal" | "low" | "medium" | "high" | "xhigh";
 }
 
 const STATUS_LABELS: Record<string, string> = {
@@ -220,6 +235,56 @@ function takeDiffSlice(text: string, budget: DiffBudget): TextSlice | undefined 
   );
   budget.remainingChars = Math.max(0, budget.remainingChars - slice.content.length);
   return slice;
+}
+
+function getFileSliceOriginalChars(file: FileEvidence): number {
+  return [file.stagedDiff, file.unstagedDiff, file.untrackedDiff].reduce(
+    (total, slice) => total + (slice?.originalChars ?? 0),
+    0,
+  );
+}
+
+function getFileSliceOriginalLines(file: FileEvidence): number {
+  return [file.stagedDiff, file.unstagedDiff, file.untrackedDiff].reduce(
+    (total, slice) => total + (slice?.originalLines ?? 0),
+    0,
+  );
+}
+
+function hasTruncatedEvidence(file: FileEvidence): boolean {
+  return [file.stagedDiff, file.unstagedDiff, file.untrackedDiff].some((slice) => slice?.truncated);
+}
+
+function classifyCommitComplexity(evidence: CommitEvidence): CommitComplexity {
+  const fileCount = evidence.files.length;
+  const partialCount = evidence.files.filter((file) => isPartiallyStaged(file.entry)).length;
+  const untrackedCount = evidence.files.filter((file) => isUntracked(file.entry)).length;
+  const truncatedCount = evidence.files.filter(hasTruncatedEvidence).length;
+  const totalOriginalChars = evidence.files.reduce(
+    (total, file) => total + getFileSliceOriginalChars(file),
+    0,
+  );
+  const totalOriginalLines = evidence.files.reduce(
+    (total, file) => total + getFileSliceOriginalLines(file),
+    0,
+  );
+  const averageCharsPerFile = fileCount > 0 ? totalOriginalChars / fileCount : 0;
+  const averageLinesPerFile = fileCount > 0 ? totalOriginalLines / fileCount : 0;
+
+  const score =
+    fileCount * 1.2 +
+    Math.min(totalOriginalChars / 3_500, 8) +
+    Math.min(totalOriginalLines / 140, 8) +
+    Math.min(averageCharsPerFile / 2_200, 4) +
+    Math.min(averageLinesPerFile / 90, 4) +
+    partialCount * 2.5 +
+    untrackedCount * 0.4 +
+    truncatedCount * 3.5;
+
+  return {
+    score,
+    complex: score >= 9,
+  };
 }
 
 function parseStatusEntries(statusOutput: string): StatusEntry[] {
@@ -523,7 +588,7 @@ function renderCommitPrompt(evidence: CommitEvidence): string {
 }
 
 export default function commitExtension(pi: ExtensionAPI): void {
-  let pendingPrompt: string | null = null;
+  let pendingRun: PendingCommitRun | null = null;
 
   pi.registerCommand("commit", {
     description: COMMAND_DESCRIPTION,
@@ -545,12 +610,51 @@ export default function commitExtension(pi: ExtensionAPI): void {
       }
 
       const prompt = renderCommitPrompt(evidence);
-      pendingPrompt = prompt;
+      const complexity = classifyCommitComplexity(evidence);
+      const targetModelId = complexity.complex ? COMPLEX_COMMIT_MODEL_ID : SIMPLE_COMMIT_MODEL_ID;
+      const targetModel = ctx.modelRegistry.find(
+        complexity.complex ? COMPLEX_COMMIT_MODEL_PROVIDER : SIMPLE_COMMIT_MODEL_PROVIDER,
+        targetModelId,
+      );
+
+      pendingRun = {
+        prompt,
+        restoreModelProvider: ctx.model?.provider,
+        restoreModelId: ctx.model?.id,
+        restoreThinkingLevel: pi.getThinkingLevel(),
+      };
+
+      if (targetModel) {
+        const switched = await pi.setModel(targetModel);
+        if (!switched) {
+          ctx.ui.notify(
+            `Unable to switch /commit model to ${targetModel.provider}/${targetModel.id}.`,
+            "warning",
+          );
+        }
+      } else {
+        ctx.ui.notify(
+          `Unable to find /commit model ${
+            complexity.complex ? COMPLEX_COMMIT_MODEL_PROVIDER : SIMPLE_COMMIT_MODEL_PROVIDER
+          }/${targetModelId}.`,
+          "warning",
+        );
+      }
+
+      pi.setThinkingLevel(COMMIT_THINKING_LEVEL);
 
       try {
         pi.sendUserMessage(COMMIT_TRIGGER_MESSAGE);
       } catch (error) {
-        pendingPrompt = null;
+        if (pendingRun?.restoreModelProvider && pendingRun?.restoreModelId) {
+          const restoreModel = ctx.modelRegistry.find(
+            pendingRun.restoreModelProvider,
+            pendingRun.restoreModelId,
+          );
+          if (restoreModel) await pi.setModel(restoreModel);
+        }
+        pi.setThinkingLevel(pendingRun?.restoreThinkingLevel ?? "medium");
+        pendingRun = null;
 
         const message = error instanceof Error ? error.message : String(error);
         ctx.ui.notify(`Unable to start /commit run: ${message}`, "error");
@@ -559,13 +663,26 @@ export default function commitExtension(pi: ExtensionAPI): void {
   });
 
   pi.on("before_agent_start", async (event) => {
-    if (!pendingPrompt) return;
+    if (!pendingRun) return;
 
-    const prompt = pendingPrompt;
-    pendingPrompt = null;
+    const prompt = pendingRun.prompt;
 
     return {
       systemPrompt: `${event.systemPrompt}\n\n${prompt}`,
     };
+  });
+
+  pi.on("agent_end", async (_event, ctx) => {
+    if (!pendingRun) return;
+
+    const restore = pendingRun;
+    pendingRun = null;
+
+    if (restore.restoreModelProvider && restore.restoreModelId) {
+      const model = ctx.modelRegistry.find(restore.restoreModelProvider, restore.restoreModelId);
+      if (model) await pi.setModel(model);
+    }
+
+    pi.setThinkingLevel(restore.restoreThinkingLevel);
   });
 }
