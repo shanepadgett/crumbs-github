@@ -3,24 +3,7 @@ bun = "1.3.11"
 "npm:oxfmt" = "0.44.0"
 "npm:oxlint" = "1.59.0"
 "npm:typescript" = "6.0.2"
-"npm:markdownlint-cli" = "0.48.0"
-
-[tasks.format]
-description = "Format TypeScript files with oxfmt"
-run = "oxfmt --write \"extensions/**/*.ts\" \".pi/extensions/**/*.ts\""
-
-[tasks.lint-ts]
-description = "Lint TypeScript files with oxlint"
-run = "oxlint . --ignore-pattern 'node_modules/**' --ignore-pattern 'external/**' --ignore-pattern 'dist/**' --ignore-pattern '**/.*/**' --ignore-pattern '**/_hidden/**'"
-
-[tasks.lint]
-description = "Run markdown and TypeScript lint tasks"
-depends = ["lint-ts"]
-
-[tasks.typecheck]
-description = "Typecheck TypeScript files"
-run = "tsc --noEmit"
 
 [tasks.check]
-description = "Check formatting and lint TypeScript files"
+description = "Run format, lint, and typecheck"
 depends = ["format", "lint", "typecheck"]
