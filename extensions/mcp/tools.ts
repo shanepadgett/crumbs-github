@@ -137,7 +137,7 @@ export function registerServerTool(
 
         let text = cut.content;
         if (cut.truncated) {
-          const tempDir = await mkdtemp(join(tmpdir(), "mcp-direct-"));
+          const tempDir = await mkdtemp(join(tmpdir(), "mcp-"));
           const file = join(tempDir, `${tool.name}-output.txt`);
           await writeFile(file, full, "utf8");
 

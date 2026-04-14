@@ -3,6 +3,35 @@ import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 export type LifecycleMode = "lazy" | "eager";
 export type TransportMode = "stdio" | "http";
 
+export interface ToolPolicyConfig {
+  enabled?: boolean;
+}
+
+export interface RawServerConfig {
+  enabled?: boolean;
+  lifecycle?: "lazy" | "eager";
+  command?: string;
+  args?: string[];
+  env?: Record<string, string>;
+  cwd?: string;
+  url?: string;
+  serverUrl?: string;
+  headers?: Record<string, string>;
+  bearerToken?: string;
+  bearerTokenEnv?: string;
+  tools?: Record<string, ToolPolicyConfig>;
+}
+
+export type ServerSourceKind = "global" | "project" | "crumbs-root" | "crumbs-extension";
+
+export interface ServerConfigRecord {
+  name: string;
+  filePath: string;
+  sourceKind: ServerSourceKind;
+  raw: RawServerConfig;
+  config: ServerConfig | null;
+}
+
 export interface ServerConfig {
   mode: TransportMode;
   lifecycle: LifecycleMode;
@@ -33,10 +62,11 @@ export interface McpClient {
 export interface ServerState {
   client: McpClient;
   config: ServerConfig;
-  tools: string[];
+  tools: McpTool[];
+  lastError?: string;
 }
 
-export const LOG_PREFIX = "[mcp-direct]";
+export const LOG_PREFIX = "[mcp]";
 
 export function errorMessage(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
