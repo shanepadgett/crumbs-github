@@ -2,5 +2,9 @@
   "crumbs-status-table": {
     "enabled": true,
     "mode": "minimal"
+  },
+  "crumbs-caveman": {
+    "enabled": true,
+    "mode": "improve"
   }
 }
