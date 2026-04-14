@@ -9,3 +9,5 @@ This file is a scratchpad for raw ideas and rambling thoughts.
 3. The prompt will clear this file after processing.
 
 ## The Dump
+
+- extension to dynamically hide all other extensions, prompts, etc so agents stays focused on targeted extension folder we tell them to investigate
