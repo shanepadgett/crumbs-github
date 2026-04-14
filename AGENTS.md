@@ -13,6 +13,8 @@
 - When modifying code, leave no past remnant unless asked to. Clean up and keep the codebase free of indirection from prior implementations.
 - Any changes to extensions/ or .pi/extensions requires user to reload before testing.
 - Only actual [extension-name].ts files may live under extensions/ root folder. All other files must be in an extension subfolder or extensions/shared/
+- For Pi extension keyboard shortcuts and footer/help hints, always use `keyHint(...)` or `rawKeyHint(...)` instead of plain text shortcut labels.
+- For Pi extension UI, prefer built-in Pi/TUI reusable components and patterns first. Only build custom UI when those components cannot support the interaction.
 - Do not manually run any validations like tsc, lint, format. Trust the system will do it silently and report any issues. This includes after you make fixes.
 
 > **IMPORTANT**: Use only known safe bash tools and flags until permissions are in place, and never work outside the current working directory until sandboxing is introduced.
