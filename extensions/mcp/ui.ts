@@ -139,12 +139,52 @@ function padRight(input: string, width: number): string {
 
 function inlineText(value: string | undefined): string {
   if (!value) return "";
-  return value
-    .replace(/\x1b\[[0-9;]*[A-Za-z]/g, "")
-    .replace(/[\r\n\t]+/g, " ")
-    .replace(/[\x00-\x1F\x7F]/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
+
+  let sanitized = "";
+  const ansiEscape = String.fromCodePoint(27);
+
+  for (let index = 0; index < value.length; index += 1) {
+    const char = value[index];
+    const code = value.codePointAt(index) ?? 0;
+
+    if (char === ansiEscape && value[index + 1] === "[") {
+      let cursor = index + 2;
+      while (cursor < value.length) {
+        const marker = value[cursor];
+        const isDigit = marker >= "0" && marker <= "9";
+        if (isDigit || marker === ";") {
+          cursor += 1;
+          continue;
+        }
+
+        if ((marker >= "A" && marker <= "Z") || (marker >= "a" && marker <= "z")) {
+          index = cursor;
+          break;
+        }
+
+        cursor = index;
+        break;
+      }
+
+      if (index === cursor) {
+        continue;
+      }
+    }
+
+    if (char === "\r" || char === "\n" || char === "\t") {
+      sanitized += " ";
+      continue;
+    }
+
+    if ((code >= 0 && code <= 31) || code === 127) {
+      sanitized += " ";
+      continue;
+    }
+
+    sanitized += char;
+  }
+
+  return sanitized.replace(/\s+/g, " ").trim();
 }
 
 function clampText(value: string | undefined, maxChars: number): string {

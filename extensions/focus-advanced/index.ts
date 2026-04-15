@@ -41,8 +41,6 @@ import {
   saveSessionFocusOverride,
   uniquePaths,
   type EffectiveFocusState,
-  type FocusAdvancedConfig,
-  type FocusMode,
   type SessionFocusOverride,
 } from "./src/settings.js";
 import { showFocusAdvancedSelector } from "./src/ui.js";

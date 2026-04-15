@@ -10,6 +10,7 @@ filtered_file="$(mktemp)"
 LINT_ARGS=(
   .
   --format unix
+  --deny-warnings
   --ignore-pattern "node_modules/**"
   --ignore-pattern "external/**"
   --ignore-pattern "dist/**"
@@ -18,7 +19,16 @@ LINT_ARGS=(
 )
 
 if [[ "${SHOW_WARNINGS:-1}" == "0" ]]; then
-  LINT_ARGS+=(--quiet)
+  LINT_ARGS=(
+    .
+    --format unix
+    --quiet
+    --ignore-pattern "node_modules/**"
+    --ignore-pattern "external/**"
+    --ignore-pattern "dist/**"
+    --ignore-pattern "**/.*/**"
+    --ignore-pattern "**/_hidden/**"
+  )
 fi
 
 if oxlint "${LINT_ARGS[@]}" >"$raw_file" 2>&1; then

@@ -54,10 +54,10 @@ export default function mcpExtension(pi: ExtensionAPI): void {
     toolName: string,
     enabled: boolean,
   ): ServerConfigRecord["raw"]["tools"] | undefined {
-    const nextTools = { ...(tools ?? {}) };
+    const nextTools = { ...tools };
 
     if (enabled) delete nextTools[toolName];
-    else nextTools[toolName] = { ...(nextTools[toolName] ?? {}), enabled: false };
+    else nextTools[toolName] = { ...nextTools[toolName], enabled: false };
 
     return Object.keys(nextTools).length > 0 ? nextTools : undefined;
   }
@@ -265,10 +265,10 @@ export default function mcpExtension(pi: ExtensionAPI): void {
     if (matches.length === 0) return `No matching tools on ${name}`;
 
     updateServerRecord(lastCwd, record.sourceKind, name, (current) => {
-      let nextTools = { ...(current?.tools ?? record.raw.tools ?? {}) };
+      let nextTools = { ...(current?.tools || record.raw.tools) };
       for (const tool of matches) {
         if (enabled) delete nextTools[tool.name];
-        else nextTools[tool.name] = { ...(nextTools[tool.name] ?? {}), enabled: false };
+        else nextTools[tool.name] = { ...nextTools[tool.name], enabled: false };
       }
       return {
         ...(current ?? record.raw),
