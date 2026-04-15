@@ -14,6 +14,8 @@
 
 import { access } from "node:fs/promises";
 import { readFile } from "node:fs/promises";
+import { homedir } from "node:os";
+import { join } from "node:path";
 import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
 import { getGlobalCrumbsPath, getProjectCrumbsPath } from "../shared/config/crumbs-paths.js";
 import { asObject, type JsonObject } from "../shared/io/json-file.js";
@@ -264,12 +266,39 @@ function renderStartupSummary(
   return lines.join("\n");
 }
 
+async function isQuietStartupEnabled(cwd: string): Promise<boolean> {
+  const globalSettingsPath = join(homedir(), ".pi", "agent", "settings.json");
+  const projectSettingsPath = join(cwd, ".pi", "settings.json");
+
+  const readQuietStartup = async (path: string): Promise<boolean | undefined> => {
+    if (!(await fileExists(path))) return undefined;
+
+    try {
+      const raw = await readFile(path, "utf8");
+      const value = asObject(JSON.parse(raw));
+      return typeof value?.quietStartup === "boolean" ? value.quietStartup : undefined;
+    } catch {
+      return undefined;
+    }
+  };
+
+  const [globalQuiet, projectQuiet] = await Promise.all([
+    readQuietStartup(globalSettingsPath),
+    readQuietStartup(projectSettingsPath),
+  ]);
+
+  return projectQuiet ?? globalQuiet ?? false;
+}
+
 export default function crumbsDoctorExtension(pi: ExtensionAPI): void {
   pi.on("session_start", async (event, ctx) => {
     if (!ctx.hasUI) return;
+    if (event.reason !== "startup" && event.reason !== "reload") return;
 
     const showSummary = async (): Promise<void> => {
       try {
+        if (await isQuietStartupEnabled(ctx.cwd)) return;
+
         const result = await inspect(ctx.cwd);
         const summary = renderStartupSummary(
           ctx,
