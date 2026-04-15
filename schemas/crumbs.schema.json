@@ -39,6 +39,12 @@
         },
         "caveman": {
           "$ref": "#/$defs/cavemanConfig"
+        },
+        "mcp": {
+          "$ref": "#/$defs/mcpConfig"
+        },
+        "mcpDirect": {
+          "$ref": "#/$defs/mcpConfig"
         }
       },
       "additionalProperties": true
@@ -326,6 +332,86 @@
         }
       },
       "additionalProperties": false
+    },
+    "mcpConfig": {
+      "type": "object",
+      "properties": {
+        "mcpServers": {
+          "type": "object",
+          "description": "Named MCP server entries.",
+          "additionalProperties": {
+            "$ref": "#/$defs/mcpServerConfig"
+          },
+          "default": {}
+        }
+      },
+      "additionalProperties": false,
+      "default": {
+        "mcpServers": {}
+      }
+    },
+    "mcpServerConfig": {
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable or disable this server entry."
+        },
+        "lifecycle": {
+          "type": "string",
+          "enum": ["lazy", "eager"],
+          "default": "lazy",
+          "description": "Server startup policy."
+        },
+        "command": {
+          "type": "string",
+          "description": "Stdio mode executable command."
+        },
+        "args": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [],
+          "description": "Stdio mode command arguments."
+        },
+        "cwd": {
+          "type": "string",
+          "description": "Optional working directory for stdio mode."
+        },
+        "env": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          },
+          "description": "Optional environment variables for stdio mode."
+        },
+        "url": {
+          "type": "string",
+          "description": "HTTP mode server URL."
+        },
+        "serverUrl": {
+          "type": "string",
+          "description": "Legacy alias for url."
+        },
+        "headers": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          },
+          "description": "Optional HTTP headers."
+        },
+        "bearerToken": {
+          "type": "string",
+          "description": "Optional static bearer token for HTTP mode."
+        },
+        "bearerTokenEnv": {
+          "type": "string",
+          "description": "Environment variable name to read bearer token from."
+        }
+      },
+      "additionalProperties": true
     },
     "sessionFocusConfig": {
       "type": "object",
