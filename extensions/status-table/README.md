@@ -18,7 +18,9 @@ It shows:
 
 - The built-in footer is hidden and replaced by this extension's attached status table.
 - The table refreshes on session start, model changes, turn updates, and a short background poll.
-- Caveman currently reads `crumbs-caveman.enabled` from Pi settings if present; otherwise it shows `off`.
+- Status table preferences read/write `extensions.statusTable` in crumbs config.
+- Global defaults: `~/.pi/agent/crumbs.json`
+- Project override: `<projectRoot>/.pi/crumbs.json`
 
 ## Usage
 

@@ -34,18 +34,15 @@ import {
 import { buildCombinedPromptHint, createPathVisibilityPolicy } from "./src/policy.js";
 import { normalizePath, type FocusConfig, type FocusMode } from "./src/settings.js";
 import { CRUMBS_EVENT_FOCUS_CHANGED } from "../shared/crumbs-events.js";
+import {
+  loadProjectCrumbsConfig,
+  updateProjectCrumbsConfig,
+} from "../shared/config/crumbs-loader.js";
+import { asObject } from "../shared/io/json-file.js";
 
 type SessionFocusOverride = Pick<Partial<FocusConfig>, "enabled" | "mode" | "roots">;
-type JsonObject = Record<string, unknown>;
-
-const SETTINGS_KEY = "crumbs-focus";
 const COMPLEX_SHELL_RE = /\|\||&&|[|;`]|\$\(|\bxargs\b|\beval\b/;
 const DISCOVERY_TOOL_RE = /\b(ls|find|fd|fdfind|rg|tree)\b/;
-
-function asObject(value: unknown): JsonObject | undefined {
-  if (!value || typeof value !== "object" || Array.isArray(value)) return undefined;
-  return value as JsonObject;
-}
 
 function parseSavedFocus(value: unknown): SessionFocusOverride | undefined {
   const section = asObject(value);
@@ -401,31 +398,14 @@ export default function pathVisibilityExtension(pi: ExtensionAPI): void {
   const focusByCwd = new Map<string, SessionFocusOverride>();
   const loadedCwds = new Set<string>();
 
-  function settingsPath(cwd: string): string {
-    return join(cwd, ".pi", "settings.json");
-  }
-
-  async function readProjectSettings(cwd: string): Promise<JsonObject> {
-    try {
-      const raw = await fs.readFile(settingsPath(cwd), "utf8");
-      const parsed = asObject(JSON.parse(raw));
-      return parsed ?? {};
-    } catch {
-      return {};
-    }
-  }
-
-  async function writeProjectSettings(cwd: string, settings: JsonObject): Promise<void> {
-    await fs.mkdir(join(cwd, ".pi"), { recursive: true });
-    await fs.writeFile(settingsPath(cwd), `${JSON.stringify(settings, null, 2)}\n`, "utf8");
-  }
-
   async function ensureFocusLoaded(cwd: string): Promise<void> {
     if (loadedCwds.has(cwd)) return;
     loadedCwds.add(cwd);
 
-    const settings = await readProjectSettings(cwd);
-    const parsed = parseSavedFocus(settings[SETTINGS_KEY]);
+    const config = await loadProjectCrumbsConfig(cwd);
+    const extensions = asObject(config.extensions);
+    const pathVisibility = asObject(extensions?.pathVisibility);
+    const parsed = parseSavedFocus(pathVisibility?.sessionFocus);
     if (!parsed) return;
 
     const normalized: SessionFocusOverride = {};
@@ -436,22 +416,37 @@ export default function pathVisibilityExtension(pi: ExtensionAPI): void {
   }
 
   async function persistFocus(cwd: string): Promise<void> {
-    const settings = await readProjectSettings(cwd);
     const current = focusByCwd.get(cwd);
 
-    if (!current) {
-      delete settings[SETTINGS_KEY];
-      await writeProjectSettings(cwd, settings);
-      return;
-    }
+    await updateProjectCrumbsConfig(cwd, (config) => {
+      const next = { ...config };
+      const extensions = asObject(next.extensions) ?? {};
+      const pathVisibility = asObject(extensions.pathVisibility) ?? {};
 
-    settings[SETTINGS_KEY] = {
-      ...(typeof current.enabled === "boolean" ? { enabled: current.enabled } : {}),
-      ...(current.mode ? { mode: current.mode } : {}),
-      ...(current.roots !== undefined ? { roots: current.roots } : {}),
-    };
+      if (!current) {
+        delete pathVisibility.sessionFocus;
+      } else {
+        pathVisibility.sessionFocus = {
+          ...(typeof current.enabled === "boolean" ? { enabled: current.enabled } : {}),
+          ...(current.mode ? { mode: current.mode } : {}),
+          ...(current.roots !== undefined ? { roots: current.roots } : {}),
+        };
+      }
 
-    await writeProjectSettings(cwd, settings);
+      if (Object.keys(pathVisibility).length === 0) {
+        delete extensions.pathVisibility;
+      } else {
+        extensions.pathVisibility = pathVisibility;
+      }
+
+      if (Object.keys(extensions).length === 0) {
+        delete next.extensions;
+      } else {
+        next.extensions = extensions;
+      }
+
+      return next;
+    });
   }
 
   function getSessionFocusOverride(cwd: string): SessionFocusOverride | undefined {

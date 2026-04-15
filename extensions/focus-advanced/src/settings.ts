@@ -1,5 +1,9 @@
-import { promises as fs } from "node:fs";
-import { join } from "node:path";
+import {
+  loadEffectiveCrumbsExtensionsConfig,
+  loadProjectCrumbsConfig,
+  updateProjectCrumbsConfig,
+} from "../../shared/config/crumbs-loader.js";
+import { asObject } from "../../shared/io/json-file.js";
 
 export type FocusMode = "soft" | "hidden" | "hard";
 
@@ -14,15 +18,6 @@ export interface FocusAdvancedConfig {
 export interface EffectiveFocusState extends FocusAdvancedConfig {}
 
 export type SessionFocusOverride = Pick<Partial<FocusAdvancedConfig>, "enabled" | "mode" | "roots">;
-
-const SETTINGS_KEY = "crumbs-focus-advanced";
-
-type JsonObject = Record<string, unknown>;
-
-function asObject(value: unknown): JsonObject | undefined {
-  if (!value || typeof value !== "object" || Array.isArray(value)) return undefined;
-  return value as JsonObject;
-}
 
 function asStringArray(value: unknown): string[] {
   if (!Array.isArray(value)) return [];
@@ -42,18 +37,8 @@ export function uniquePaths(paths: string[]): string[] {
   return [...new Set(paths.map((pathValue) => normalizePath(pathValue.trim())).filter(Boolean))];
 }
 
-async function readJson(path: string): Promise<JsonObject> {
-  try {
-    const raw = await fs.readFile(path, "utf8");
-    return asObject(JSON.parse(raw)) ?? {};
-  } catch {
-    return {};
-  }
-}
-
 export async function loadFocusAdvancedConfig(cwd: string): Promise<FocusAdvancedConfig> {
-  const root = await readJson(join(cwd, ".pi", "crumbs.json"));
-  const extensions = asObject(root.extensions);
+  const extensions = asObject(await loadEffectiveCrumbsExtensionsConfig(cwd));
   const config = asObject(extensions?.focusAdvanced);
   const legacyPathVisibility = asObject(extensions?.pathVisibility);
   const legacyFocus = asObject(legacyPathVisibility?.focus);
@@ -85,8 +70,10 @@ export async function loadFocusAdvancedConfig(cwd: string): Promise<FocusAdvance
 export async function loadSessionFocusOverride(
   cwd: string,
 ): Promise<SessionFocusOverride | undefined> {
-  const settings = await readJson(join(cwd, ".pi", "settings.json"));
-  const section = asObject(settings[SETTINGS_KEY]);
+  const config = await loadProjectCrumbsConfig(cwd);
+  const extensions = asObject(config.extensions);
+  const focusAdvanced = asObject(extensions?.focusAdvanced);
+  const section = asObject(focusAdvanced?.sessionFocus);
   if (!section) return undefined;
 
   const next: SessionFocusOverride = {
@@ -104,21 +91,35 @@ export async function saveSessionFocusOverride(
   cwd: string,
   override: SessionFocusOverride | undefined,
 ): Promise<void> {
-  const settingsPath = join(cwd, ".pi", "settings.json");
-  const settings = await readJson(settingsPath);
+  await updateProjectCrumbsConfig(cwd, (current) => {
+    const next = { ...current };
+    const extensions = asObject(next.extensions) ?? {};
+    const focusAdvanced = asObject(extensions.focusAdvanced) ?? {};
 
-  if (!override) {
-    delete settings[SETTINGS_KEY];
-  } else {
-    settings[SETTINGS_KEY] = {
-      ...(typeof override.enabled === "boolean" ? { enabled: override.enabled } : {}),
-      ...(override.mode ? { mode: override.mode } : {}),
-      ...(override.roots !== undefined ? { roots: uniquePaths(override.roots) } : {}),
-    };
-  }
+    if (!override) {
+      delete focusAdvanced.sessionFocus;
+    } else {
+      focusAdvanced.sessionFocus = {
+        ...(typeof override.enabled === "boolean" ? { enabled: override.enabled } : {}),
+        ...(override.mode ? { mode: override.mode } : {}),
+        ...(override.roots !== undefined ? { roots: uniquePaths(override.roots) } : {}),
+      };
+    }
 
-  await fs.mkdir(join(cwd, ".pi"), { recursive: true });
-  await fs.writeFile(settingsPath, `${JSON.stringify(settings, null, 2)}\n`, "utf8");
+    if (Object.keys(focusAdvanced).length === 0) {
+      delete extensions.focusAdvanced;
+    } else {
+      extensions.focusAdvanced = focusAdvanced;
+    }
+
+    if (Object.keys(extensions).length === 0) {
+      delete next.extensions;
+    } else {
+      next.extensions = extensions;
+    }
+
+    return next;
+  });
 }
 
 export function mergeFocusAdvancedState(

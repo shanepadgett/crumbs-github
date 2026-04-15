@@ -7,6 +7,7 @@
  * - Supports two user modes: `minimal` and `self-improving`.
  *
  * How to use it:
+ * - Persist defaults in crumbs config: `extensions.caveman` in `.pi/crumbs.json`.
  * - Run `/caveman on` for minimal caveman coding mode.
  * - Run `/caveman improve` for caveman mode with Pi-doc/self-improvement guidance.
  * - Run `/caveman off` to restore normal prompt behavior.
@@ -15,11 +16,16 @@
  * - `/caveman improve`
  */
 
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { createRequire } from "node:module";
 import type { ExtensionAPI, ExtensionContext } from "@mariozechner/pi-coding-agent";
 import { CRUMBS_EVENT_CAVEMAN_CHANGED } from "../shared/crumbs-events.js";
+import {
+  loadEffectiveExtensionConfig,
+  loadProjectCrumbsConfig,
+  updateGlobalCrumbsConfig,
+} from "../shared/config/crumbs-loader.js";
+import { asObject, type JsonObject } from "../shared/io/json-file.js";
 import {
   buildCavemanSystemPrompt,
   normalizeCavemanMode,
@@ -31,33 +37,11 @@ type CavemanState = {
   mode: CavemanMode;
 };
 
-type JsonObject = Record<string, unknown>;
-
-const SETTINGS_KEY = "crumbs-caveman";
 const DEFAULT_STATE: CavemanState = { enabled: false, mode: "minimal" };
 
 const require = createRequire(import.meta.url);
 
-function asObject(value: unknown): JsonObject | undefined {
-  if (!value || typeof value !== "object" || Array.isArray(value)) return undefined;
-  return value as JsonObject;
-}
-
-function getProjectSettingsPath(cwd: string): string {
-  return join(cwd, ".pi", "settings.json");
-}
-
-function readJsonFile(path: string): JsonObject {
-  try {
-    const parsed = JSON.parse(readFileSync(path, "utf8"));
-    return asObject(parsed) ?? {};
-  } catch {
-    return {};
-  }
-}
-
-function parseState(settings: JsonObject): CavemanState {
-  const section = asObject(settings[SETTINGS_KEY]);
+function parseState(section: JsonObject | null): CavemanState {
   if (!section) return { ...DEFAULT_STATE };
 
   const enabled = typeof section.enabled === "boolean" ? section.enabled : DEFAULT_STATE.enabled;
@@ -65,21 +49,33 @@ function parseState(settings: JsonObject): CavemanState {
   return { enabled, mode };
 }
 
-function saveState(cwd: string, state: CavemanState): void {
-  const settingsPath = getProjectSettingsPath(cwd);
-  const settings = readJsonFile(settingsPath);
-  settings[SETTINGS_KEY] = {
-    enabled: state.enabled,
-    mode: state.mode,
-  };
+async function saveState(state: CavemanState): Promise<void> {
+  await updateGlobalCrumbsConfig((current) => {
+    const next = { ...current };
+    const extensions = asObject(next.extensions) ?? {};
+    const caveman = asObject(extensions.caveman) ?? {};
 
-  mkdirSync(dirname(settingsPath), { recursive: true });
-  writeFileSync(settingsPath, `${JSON.stringify(settings, null, 2)}\n`, "utf8");
+    extensions.caveman = {
+      ...caveman,
+      enabled: state.enabled,
+      mode: state.mode,
+    };
+
+    next.extensions = extensions;
+    return next;
+  });
 }
 
-function loadState(cwd: string): CavemanState {
-  const settings = readJsonFile(getProjectSettingsPath(cwd));
-  return parseState(settings);
+async function loadState(cwd: string): Promise<CavemanState> {
+  const config = asObject(await loadEffectiveExtensionConfig(cwd, "caveman"));
+  return parseState(config);
+}
+
+async function hasProjectOverride(cwd: string): Promise<boolean> {
+  const project = await loadProjectCrumbsConfig(cwd);
+  const extensions = asObject(project.extensions);
+  const caveman = asObject(extensions?.caveman);
+  return Boolean(caveman);
 }
 
 function getPiDocsPaths(): { readme: string; docs: string; examples: string } {
@@ -112,28 +108,46 @@ function notifyMode(ctx: ExtensionContext, state: CavemanState): void {
 
 export default function cavemanExtension(pi: ExtensionAPI): void {
   const stateByCwd = new Map<string, CavemanState>();
+  const loadedCwds = new Set<string>();
 
-  function getState(cwd: string): CavemanState {
+  async function getState(cwd: string): Promise<CavemanState> {
+    if (!loadedCwds.has(cwd)) {
+      loadedCwds.add(cwd);
+      stateByCwd.set(cwd, await loadState(cwd));
+    }
+
     const cached = stateByCwd.get(cwd);
-    if (cached) return cached;
-    const loaded = loadState(cwd);
-    stateByCwd.set(cwd, loaded);
-    return loaded;
+    return cached ?? { ...DEFAULT_STATE };
   }
 
-  function setState(
+  async function setState(
     ctx: ExtensionContext,
     next: CavemanState,
     options?: { notify?: boolean },
-  ): void {
-    stateByCwd.set(ctx.cwd, next);
-    saveState(ctx.cwd, next);
+  ): Promise<void> {
+    loadedCwds.add(ctx.cwd);
+    await saveState(next);
+    const effective = await loadState(ctx.cwd);
+    stateByCwd.set(ctx.cwd, effective);
+
     pi.events.emit(CRUMBS_EVENT_CAVEMAN_CHANGED, {
       cwd: ctx.cwd,
-      enabled: next.enabled,
-      mode: next.mode,
+      enabled: effective.enabled,
+      mode: effective.mode,
     });
-    if (options?.notify !== false) notifyMode(ctx, next);
+
+    if (options?.notify !== false) {
+      notifyMode(ctx, effective);
+      if ((effective.enabled !== next.enabled || effective.mode !== next.mode) && ctx.hasUI) {
+        const projectOverride = await hasProjectOverride(ctx.cwd);
+        if (projectOverride) {
+          ctx.ui.notify(
+            "Project crumbs override is active (.pi/crumbs.json -> extensions.caveman). Global toggle saved but local override still wins.",
+            "warning",
+          );
+        }
+      }
+    }
   }
 
   function applyArg(current: CavemanState, rawArgs: string): CavemanState | "usage" {
@@ -166,7 +180,7 @@ export default function cavemanExtension(pi: ExtensionAPI): void {
       return filtered.length > 0 ? filtered.map((item) => ({ value: item, label: item })) : null;
     },
     handler: async (args, ctx) => {
-      const current = getState(ctx.cwd);
+      const current = await getState(ctx.cwd);
       const result = applyArg(current, args);
 
       if (result === "usage") {
@@ -176,12 +190,12 @@ export default function cavemanExtension(pi: ExtensionAPI): void {
         return;
       }
 
-      setState(ctx, result);
+      await setState(ctx, result);
     },
   });
 
   pi.on("session_start", async (_event, ctx) => {
-    const state = getState(ctx.cwd);
+    const state = await getState(ctx.cwd);
     pi.events.emit(CRUMBS_EVENT_CAVEMAN_CHANGED, {
       cwd: ctx.cwd,
       enabled: state.enabled,
@@ -190,7 +204,7 @@ export default function cavemanExtension(pi: ExtensionAPI): void {
   });
 
   (pi as any).on("session_switch", async (_event: unknown, ctx: ExtensionContext) => {
-    const state = getState(ctx.cwd);
+    const state = await getState(ctx.cwd);
     pi.events.emit(CRUMBS_EVENT_CAVEMAN_CHANGED, {
       cwd: ctx.cwd,
       enabled: state.enabled,
@@ -199,7 +213,7 @@ export default function cavemanExtension(pi: ExtensionAPI): void {
   });
 
   (pi as any).on("session_tree", async (_event: unknown, ctx: ExtensionContext) => {
-    const state = getState(ctx.cwd);
+    const state = await getState(ctx.cwd);
     pi.events.emit(CRUMBS_EVENT_CAVEMAN_CHANGED, {
       cwd: ctx.cwd,
       enabled: state.enabled,
@@ -208,7 +222,7 @@ export default function cavemanExtension(pi: ExtensionAPI): void {
   });
 
   pi.on("before_agent_start", async (_event, ctx) => {
-    const state = getState(ctx.cwd);
+    const state = await getState(ctx.cwd);
     if (!state.enabled) return undefined;
 
     const docs = getPiDocsPaths();

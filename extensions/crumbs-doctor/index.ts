@@ -3,34 +3,20 @@
  *
  * What it does:
  * - Adds `/crumbs doctor` to inspect crumbs settings health.
- * - Detects deprecated crumbs keys in Pi settings files.
  * - Detects malformed crumbs JSON and known-key type conflicts.
- * - Supports optional `--fix` for safe cleanup of deprecated Pi settings keys.
  *
  * How to use it:
- * - Run `/crumbs doctor` for report-only mode.
- * - Run `/crumbs doctor --fix` to remove deprecated crumbs keys from Pi settings.
+ * - Run `/crumbs doctor` for report-only validation.
  *
  * Example:
- * - `/crumbs doctor --fix`
+ * - `/crumbs doctor`
  */
 
 import { access } from "node:fs/promises";
 import { readFile } from "node:fs/promises";
-import { homedir } from "node:os";
-import { join } from "node:path";
 import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
 import { getGlobalCrumbsPath, getProjectCrumbsPath } from "../shared/config/crumbs-paths.js";
-import { resolveProjectRoot } from "../shared/config/project-root.js";
-import { asObject, writeJsonObject, type JsonObject } from "../shared/io/json-file.js";
-
-const DEPRECATED_PI_SETTINGS_KEYS = [
-  "crumbs-fast",
-  "crumbs-caveman",
-  "crumbs-focus",
-  "crumbs-focus-advanced",
-  "crumbs-status-table",
-] as const;
+import { asObject, type JsonObject } from "../shared/io/json-file.js";
 
 type JsonStatus =
   | { exists: false; path: string }
@@ -38,7 +24,6 @@ type JsonStatus =
   | { exists: true; path: string; ok: false; error: string };
 
 type Finding =
-  | { kind: "deprecated-key"; filePath: string; key: string }
   | { kind: "malformed-json"; filePath: string; error: string }
   | { kind: "type-conflict"; filePath: string; keyPath: string; expected: string; actual: string };
 
@@ -181,46 +166,15 @@ async function readJsonStatus(path: string): Promise<JsonStatus> {
   }
 }
 
-async function inspect(
-  cwd: string,
-  fix: boolean,
-): Promise<{
+async function inspect(cwd: string): Promise<{
   findings: Finding[];
-  fixes: string[];
   hasGlobalCrumbs: boolean;
   hasProjectCrumbs: boolean;
 }> {
   const findings: Finding[] = [];
-  const fixes: string[] = [];
 
-  const projectRoot = await resolveProjectRoot(cwd);
   const projectCrumbsPath = await getProjectCrumbsPath(cwd);
   const globalCrumbsPath = getGlobalCrumbsPath();
-  const projectPiSettingsPath = join(projectRoot, ".pi", "settings.json");
-  const globalPiSettingsPath = join(homedir(), ".pi", "agent", "settings.json");
-
-  const [projectPiSettings, globalPiSettings] = await Promise.all([
-    readJsonStatus(projectPiSettingsPath),
-    readJsonStatus(globalPiSettingsPath),
-  ]);
-
-  for (const source of [projectPiSettings, globalPiSettings]) {
-    if (!source.exists || !source.ok) continue;
-
-    const keysToRemove: string[] = [];
-    for (const key of DEPRECATED_PI_SETTINGS_KEYS) {
-      if (!(key in source.value)) continue;
-      findings.push({ kind: "deprecated-key", filePath: source.path, key });
-      keysToRemove.push(key);
-    }
-
-    if (fix && keysToRemove.length > 0) {
-      const next = { ...source.value };
-      for (const key of keysToRemove) delete next[key];
-      await writeJsonObject(source.path, next);
-      fixes.push(`removed deprecated keys from ${source.path}`);
-    }
-  }
 
   const crumbsStatuses = await Promise.all([
     readJsonStatus(globalCrumbsPath),
@@ -251,27 +205,21 @@ async function inspect(
     }
   }
 
-  return { findings, fixes, hasGlobalCrumbs, hasProjectCrumbs };
+  return { findings, hasGlobalCrumbs, hasProjectCrumbs };
 }
 
-function renderReport(findings: Finding[], fixes: string[], fixMode: boolean): string {
+function renderReport(findings: Finding[]): string {
   const lines: string[] = [];
   lines.push("crumbs-doctor");
 
   if (findings.length === 0) {
     lines.push("No issues found.");
-    if (fixMode) lines.push("No fixes applied.");
     return lines.join("\n");
   }
 
   lines.push(`Found ${findings.length} issue(s):`);
 
   for (const finding of findings) {
-    if (finding.kind === "deprecated-key") {
-      lines.push(`- deprecated key in Pi settings: ${finding.key} @ ${finding.filePath}`);
-      continue;
-    }
-
     if (finding.kind === "malformed-json") {
       lines.push(`- malformed crumbs json: ${finding.filePath}`);
       lines.push(`  error: ${finding.error}`);
@@ -285,23 +233,11 @@ function renderReport(findings: Finding[], fixes: string[], fixMode: boolean): s
 
   lines.push("");
   lines.push("Suggested cleanup:");
-  if (findings.some((item) => item.kind === "deprecated-key")) {
-    lines.push(
-      "- Run `/crumbs doctor --fix` to remove deprecated crumbs keys from Pi settings files.",
-    );
-  }
   if (findings.some((item) => item.kind === "malformed-json")) {
     lines.push("- Fix malformed JSON in listed crumbs files.");
   }
   if (findings.some((item) => item.kind === "type-conflict")) {
     lines.push("- Correct key types in crumbs files to match schema expectations.");
-  }
-
-  if (fixMode) {
-    lines.push("");
-    lines.push("Fixes applied:");
-    if (fixes.length === 0) lines.push("- none");
-    else for (const fix of fixes) lines.push(`- ${fix}`);
   }
 
   return lines.join("\n");
@@ -334,7 +270,7 @@ export default function crumbsDoctorExtension(pi: ExtensionAPI): void {
 
     const showSummary = async (): Promise<void> => {
       try {
-        const result = await inspect(ctx.cwd, false);
+        const result = await inspect(ctx.cwd);
         const summary = renderStartupSummary(
           ctx,
           result.hasGlobalCrumbs,
@@ -355,10 +291,10 @@ export default function crumbsDoctorExtension(pi: ExtensionAPI): void {
   });
 
   pi.registerCommand("crumbs", {
-    description: "Crumbs utilities. Usage: /crumbs doctor [--fix]",
+    description: "Crumbs utilities. Usage: /crumbs doctor",
     getArgumentCompletions(prefix) {
       const value = prefix.trim();
-      const options = ["doctor", "doctor --fix"];
+      const options = ["doctor"];
       const filtered = options.filter((option) => option.startsWith(value));
       return filtered.length > 0
         ? filtered.map((option) => ({ value: option, label: option }))
@@ -368,14 +304,13 @@ export default function crumbsDoctorExtension(pi: ExtensionAPI): void {
       const tokens = args.trim().split(/\s+/).filter(Boolean);
 
       if (tokens[0] !== "doctor") {
-        if (ctx.hasUI) ctx.ui.notify("Usage: /crumbs doctor [--fix]", "warning");
+        if (ctx.hasUI) ctx.ui.notify("Usage: /crumbs doctor", "warning");
         return;
       }
 
-      const fix = tokens.includes("--fix");
       try {
-        const { findings, fixes } = await inspect(ctx.cwd, fix);
-        const report = renderReport(findings, fixes, fix);
+        const { findings } = await inspect(ctx.cwd);
+        const report = renderReport(findings);
         if (ctx.hasUI) ctx.ui.notify(report, findings.length > 0 ? "warning" : "info");
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);

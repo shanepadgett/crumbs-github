@@ -8,6 +8,7 @@
  *
  * How to use it:
  * - Install this package with `pi install .` and keep the extension enabled.
+ * - Configure persisted fast toggle in crumbs config: `extensions.codexCompat.fast`.
  * - Switch to a supported Codex-family model and the minimal compatibility tool set activates automatically.
  * - Switch away from that model and Pi restores the prior non-compat tool set.
  *
@@ -17,15 +18,15 @@
  */
 
 import type { Model } from "@mariozechner/pi-ai";
-import {
-  SettingsManager,
-  keyHint,
-  type ExtensionAPI,
-  type ExtensionContext,
-} from "@mariozechner/pi-coding-agent";
+import { keyHint, type ExtensionAPI, type ExtensionContext } from "@mariozechner/pi-coding-agent";
 import { Text } from "@mariozechner/pi-tui";
 import { Type } from "@sinclair/typebox";
 import { CRUMBS_EVENT_FAST_CHANGED } from "../shared/crumbs-events.js";
+import {
+  loadEffectiveExtensionConfig,
+  updateGlobalCrumbsConfig,
+} from "../shared/config/crumbs-loader.js";
+import { asObject } from "../shared/io/json-file.js";
 import { applyPatch, type ApplyPatchChange, type ApplyPatchSummary } from "./src/apply-patch.js";
 import { parseApplyPatchInvocation } from "./src/apply-patch-invocation.js";
 import { type CodexCompatCapabilities, getCodexCompatCapabilities } from "./src/capabilities.js";
@@ -35,9 +36,6 @@ const COMPAT_TOOL_NAMES = new Set(["apply_patch", "view_image"]);
 const SUPPRESSED_BUILTINS = new Set(["edit", "write"]);
 const KEPT_BUILTINS = ["read", "bash"] as const;
 const FAST_STATUS_KEY = "fast";
-const FAST_SETTINGS_KEY = "crumbs-fast";
-
-const settingsManagers = new Map<string, SettingsManager>();
 
 const APPLY_PATCH_PARAMS = Type.Object({
   input: Type.String({
@@ -66,82 +64,25 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-function asObject(value: unknown): Record<string, unknown> | null {
-  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
-  return value as Record<string, unknown>;
+async function loadPersistedFastState(cwd: string): Promise<boolean | undefined> {
+  const config = asObject(await loadEffectiveExtensionConfig(cwd, "codexCompat"));
+  return typeof config?.fast === "boolean" ? config.fast : undefined;
 }
 
-function mergeSettings(
-  base: Record<string, unknown>,
-  overrides: Record<string, unknown>,
-): Record<string, unknown> {
-  const merged: Record<string, unknown> = { ...base };
-  for (const [key, overrideValue] of Object.entries(overrides)) {
-    const baseValue = merged[key];
-    if (isRecord(baseValue) && isRecord(overrideValue)) {
-      merged[key] = mergeSettings(baseValue, overrideValue);
-      continue;
-    }
-    merged[key] = overrideValue;
-  }
-  return merged;
-}
+async function persistFastState(enabled: boolean): Promise<void> {
+  await updateGlobalCrumbsConfig((current) => {
+    const next = { ...current };
+    const extensions = asObject(next.extensions) ?? {};
+    const codexCompat = asObject(extensions.codexCompat) ?? {};
 
-function getSettingsManager(cwd: string): SettingsManager {
-  const existing = settingsManagers.get(cwd);
-  if (existing) return existing;
+    extensions.codexCompat = {
+      ...codexCompat,
+      fast: enabled,
+    };
 
-  const manager = SettingsManager.create(cwd);
-  settingsManagers.set(cwd, manager);
-  return manager;
-}
-
-function getEffectiveSettings(settingsManager: SettingsManager): Record<string, unknown> {
-  return mergeSettings(
-    settingsManager.getGlobalSettings() as Record<string, unknown>,
-    settingsManager.getProjectSettings() as Record<string, unknown>,
-  );
-}
-
-function loadPersistedFastState(cwd: string): boolean | undefined {
-  const settingsManager = getSettingsManager(cwd);
-  settingsManager.reload();
-  const settings = getEffectiveSettings(settingsManager);
-  const extensionSettings = asObject(settings[FAST_SETTINGS_KEY]);
-  return typeof extensionSettings?.enabled === "boolean" ? extensionSettings.enabled : undefined;
-}
-
-function persistFastState(enabled: boolean, cwd: string): SettingsManager {
-  const settingsManager = getSettingsManager(cwd);
-  const internal = settingsManager as unknown as {
-    globalSettings: Record<string, unknown>;
-    markModified(field: string, nestedKey?: string): void;
-    save(): void;
-  };
-  settingsManager.reload();
-
-  const globalSettings = settingsManager.getGlobalSettings() as Record<string, unknown>;
-  const extensionSettings = asObject(globalSettings[FAST_SETTINGS_KEY]) ?? {};
-
-  internal.globalSettings[FAST_SETTINGS_KEY] = {
-    ...extensionSettings,
-    enabled,
-  };
-
-  internal.markModified(FAST_SETTINGS_KEY);
-  internal.save();
-  return settingsManager;
-}
-
-function reportFastSettingsErrors(
-  settingsManager: SettingsManager,
-  ctx: ExtensionContext,
-  action: "load" | "write",
-): void {
-  if (!ctx.hasUI) return;
-  for (const { scope, error } of settingsManager.drainErrors()) {
-    ctx.ui.notify(`fast: failed to ${action} ${scope} settings: ${error.message}`, "warning");
-  }
+    next.extensions = extensions;
+    return next;
+  });
 }
 
 function isFastSupportedProvider(ctx: ExtensionContext): boolean {
@@ -506,13 +447,10 @@ export default function codexCompatExtension(pi: ExtensionAPI) {
   let settingsWriteQueue: Promise<void> = Promise.resolve();
 
   function persistEnabled(nextEnabled: boolean, ctx: ExtensionContext): void {
-    const cwd = ctx.cwd;
     settingsWriteQueue = settingsWriteQueue
       .catch(() => undefined)
       .then(async () => {
-        const settingsManager = persistFastState(nextEnabled, cwd);
-        await settingsManager.flush();
-        reportFastSettingsErrors(settingsManager, ctx, "write");
+        await persistFastState(nextEnabled);
       });
 
     void settingsWriteQueue.catch((error) => {
@@ -540,9 +478,7 @@ export default function codexCompatExtension(pi: ExtensionAPI) {
     fastEnabled = false;
 
     try {
-      const settingsManager = getSettingsManager(ctx.cwd);
-      const persistedEnabled = loadPersistedFastState(ctx.cwd);
-      reportFastSettingsErrors(settingsManager, ctx, "load");
+      const persistedEnabled = await loadPersistedFastState(ctx.cwd);
       if (typeof persistedEnabled === "boolean") {
         fastEnabled = persistedEnabled;
       }

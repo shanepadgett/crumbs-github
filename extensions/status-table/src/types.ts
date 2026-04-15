@@ -51,5 +51,3 @@ export type Cell = {
   valueColor?: ThemeColor;
   renderedValue?: string;
 };
-
-export type SettingsObject = Record<string, unknown>;

@@ -1,5 +1,4 @@
-import { promises as fs } from "node:fs";
-import { join } from "node:path";
+import { loadEffectiveCrumbsExtensionsConfig } from "../shared/config/crumbs-loader.js";
 
 export function asRecord(value: unknown): Record<string, unknown> | null {
   if (!value || typeof value !== "object" || Array.isArray(value)) return null;
@@ -16,14 +15,8 @@ export function asBoolean(value: unknown, fallback = false): boolean {
 }
 
 export async function readExtensionConfig(cwd: string): Promise<Record<string, unknown> | null> {
-  try {
-    const content = await fs.readFile(join(cwd, ".pi", "crumbs.json"), "utf8");
-    const parsed = JSON.parse(content) as unknown;
-    const root = asRecord(parsed);
-    return asRecord(root?.extensions);
-  } catch {
-    return null;
-  }
+  const extensions = await loadEffectiveCrumbsExtensionsConfig(cwd);
+  return asRecord(extensions);
 }
 
 export function normalizePath(relativePath: string): string {

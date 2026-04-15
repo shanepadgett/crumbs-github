@@ -59,3 +59,31 @@ pi remove .
 ```bash
 pi remove -l .
 ```
+
+## Crumbs settings reload behavior
+
+Crumbs settings are cached after Pi loads extensions.
+
+If you edit crumbs settings files while Pi is running, `/reload` Pi to pick up changes.
+
+## Crumbs settings architecture
+
+Crumbs uses two config locations:
+
+- global: `~/.pi/agent/crumbs.json`
+- project: `<projectRoot>/.pi/crumbs.json`
+
+Effective config precedence:
+
+- project crumbs overrides global crumbs
+- missing keys fall back to extension defaults
+
+Ownership boundary:
+
+- crumbs-owned config should live in crumbs files
+- Pi settings files are not target home for crumbs-owned config
+
+Migration note:
+
+- this repo is actively migrating extension settings to crumbs files
+- some extensions may still read/write Pi settings until migration phases complete
