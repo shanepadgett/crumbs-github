@@ -88,6 +88,7 @@ function buildModeBlock(input: BuildCavemanPromptInput): string {
     "- Read relevant .md docs first and follow cross-references before editing Pi-specific code.",
     "- Always prefer installed Pi docs/examples paths above over guessing repo-local copies.",
     "- Prefer extension APIs/hooks over internal hacks when possible.",
+    "- For Pi TUI work, bias toward built-in components first: Text, Container, Spacer, Input, SelectList, TruncatedText, DynamicBorder. Use SelectList for simple picks, Input plus Text rows for search-heavy lists, DynamicBorder for Pi-style chrome, custom UI only when layout or behavior truly exceeds built-ins.",
   ].join("\n");
 }
 
