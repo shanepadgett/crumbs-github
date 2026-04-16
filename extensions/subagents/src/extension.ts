@@ -13,6 +13,7 @@ import {
   clearAgentRegistryCache,
   discoverAgents,
 } from "./agents.js";
+import { runCreateCommand } from "./create.js";
 import { isSubagentDebugEnabled, setSubagentDebugEnabled } from "./debug.js";
 import {
   renderDetails,
@@ -232,10 +233,10 @@ export default function subagentsExtension(pi: ExtensionAPI): void {
   });
 
   pi.registerCommand("subagent", {
-    description: "Subagent utilities. Usage: /subagent [list|doctor|debug on|off|status]",
+    description: "Subagent utilities. Usage: /subagent [list|doctor|create|debug on|off|status]",
     getArgumentCompletions(prefix) {
       const value = prefix.trim().toLowerCase();
-      const options = ["list", "doctor", "debug on", "debug off", "debug status"];
+      const options = ["list", "doctor", "create", "debug on", "debug off", "debug status"];
       const filtered = options.filter((option) => option.startsWith(value));
       return filtered.length ? filtered.map((option) => ({ value: option, label: option })) : null;
     },
@@ -261,6 +262,10 @@ export default function subagentsExtension(pi: ExtensionAPI): void {
           );
         return;
       }
+      if (command === "create") {
+        await runCreateCommand(ctx, pi);
+        return;
+      }
       if (command === "debug") {
         if (!subcommand || subcommand === "status") {
           if (ctx.hasUI) ctx.ui.notify(renderDebugModeStatus(), "info");
@@ -277,7 +282,8 @@ export default function subagentsExtension(pi: ExtensionAPI): void {
           return;
         }
       }
-      if (ctx.hasUI) ctx.ui.notify("Usage: /subagent [list|doctor|debug on|off|status]", "warning");
+      if (ctx.hasUI)
+        ctx.ui.notify("Usage: /subagent [list|doctor|create|debug on|off|status]", "warning");
     },
   });
 }
