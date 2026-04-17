@@ -1,9 +1,20 @@
 {
   "$schema": "../schemas/crumbs.schema.json",
   "extensions": {
+    "caveman": {
+      "enabled": true,
+      "mode": "improve"
+    },
     "pathVisibility": {
       "enabled": true,
-      "deny": [".env", ".env.*", "~/.ssh/**", "~/.aws/**", "~/.gnupg/**", "docs/_hidden/**"],
+      "deny": [
+        ".env",
+        ".env.*",
+        "~/.ssh/**",
+        "~/.aws/**",
+        "~/.gnupg/**",
+        "docs/_hidden/**"
+      ],
       "injectPromptHint": true,
       "focus": {
         "enabled": false,
@@ -25,18 +36,28 @@
       }
     },
     "quietMarkdownlint": {
-      "excludeGlobs": ["external/**", "docs/_hidden/**"]
+      "excludeGlobs": [
+        "external/**",
+        "docs/_hidden/**"
+      ]
     },
     "quietMiseTask": {
       "task": "check",
-      "excludeGlobs": ["external/**"],
-      "trackedExtensions": [".ts"]
+      "excludeGlobs": [
+        "external/**"
+      ],
+      "trackedExtensions": [
+        ".ts"
+      ]
     },
     "mcp": {
       "mcpServers": {
         "pencil": {
           "command": "/Users/spadgett/.pencil/mcp/visual_studio_code/out/mcp-server-darwin-arm64",
-          "args": ["--app", "visual_studio_code"],
+          "args": [
+            "--app",
+            "visual_studio_code"
+          ],
           "lifecycle": "lazy",
           "enabled": false
         }
