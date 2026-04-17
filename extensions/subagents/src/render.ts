@@ -19,22 +19,6 @@ type CollapsibleBlock = {
   footer?: string;
 };
 
-type WorkflowShape =
-  | Workflow
-  | {
-      mode: Workflow["mode"];
-      runs?: Array<{ agent: string; prompt?: string }>;
-      items?: Array<{ agent: string; prompt: string }>;
-      chain?: Array<{ agent: string; task?: string }>;
-      tasks?: Array<{ agent: string; task?: string }>;
-      agent?: string;
-      task?: string;
-    };
-
-type WorkflowPromptItem = { agent: string; prompt: string };
-type WorkflowAgentItem = { agent: string; prompt?: string };
-type WorkflowTaskItem = { agent: string; task?: string };
-
 function truncateText(value: string, maxLength: number): string {
   if (value.length <= maxLength) return value;
   return `${value.slice(0, Math.max(0, maxLength - 1)).trimEnd()}…`;
@@ -62,48 +46,19 @@ function subtitleFromTask(task: string | undefined): string | undefined {
   return normalized ? truncateText(normalized, 48) : undefined;
 }
 
-function getWorkflowItems(workflow: WorkflowShape): WorkflowPromptItem[] | undefined {
-  return "items" in workflow ? workflow.items : undefined;
-}
-
-function getWorkflowRuns(workflow: WorkflowShape): WorkflowAgentItem[] | undefined {
-  return "runs" in workflow ? workflow.runs : undefined;
-}
-
-function getWorkflowChain(workflow: WorkflowShape): WorkflowTaskItem[] | undefined {
-  return "chain" in workflow ? workflow.chain : undefined;
-}
-
-function getWorkflowTasks(workflow: WorkflowShape): WorkflowTaskItem[] | undefined {
-  return "tasks" in workflow ? workflow.tasks : undefined;
-}
-
-export function formatWorkflowLabel(workflow: WorkflowShape): string {
-  const items = getWorkflowItems(workflow);
-  const runs = getWorkflowRuns(workflow);
-  const chain = getWorkflowChain(workflow);
-  const tasks = getWorkflowTasks(workflow);
-  const subtitle =
-    workflow.mode === "single"
-      ? subtitleFromTask("task" in workflow ? workflow.task : items?.[0]?.prompt)
-      : workflow.mode === "chain"
-        ? subtitleFromTask(chain?.length ? chain[0]?.task : items?.[0]?.prompt)
-        : subtitleFromTask(tasks?.length ? tasks[0]?.task : items?.[0]?.prompt);
+export function formatWorkflowLabel(workflow: Workflow): string {
   if (workflow.mode === "single") {
-    const name = "agent" in workflow ? workflow.agent : runs?.[0]?.agent;
-    const base = name ? `subagent · ${name}` : "subagent";
+    const subtitle = subtitleFromTask(workflow.task);
+    const base = `subagent · ${workflow.agent}`;
     return subtitle ? `${base} (${subtitle})` : base;
   }
   if (workflow.mode === "chain") {
-    const names =
-      chain?.map((item) => item.agent) ??
-      items?.map((item) => item.agent) ??
-      runs?.map((item) => item.agent) ??
-      [];
-    const base = names.length ? `subagent · ${truncateText(names.join(" → "), 72)}` : "subagent";
+    const subtitle = subtitleFromTask(workflow.chain[0]?.task);
+    const base = `subagent · ${truncateText(workflow.chain.map((item) => item.agent).join(" → "), 72)}`;
     return subtitle ? `${base} (${subtitle})` : base;
   }
-  const count = tasks?.length ?? items?.length ?? runs?.length ?? 0;
+  const subtitle = subtitleFromTask(workflow.tasks[0]?.task);
+  const count = workflow.tasks.length;
   const base = `subagent · ${count} task${count === 1 ? "" : "s"}`;
   return subtitle ? `${base} (${subtitle})` : base;
 }
@@ -197,16 +152,6 @@ function renderActivity(item: ToolActivity, cwd: string): string {
   return item.status === "error"
     ? `${action} · error: ${truncateText(item.preview || "failed", 100)}`
     : action;
-}
-
-function renderDebug(debug: Record<string, unknown> | undefined): string {
-  if (!debug) return "";
-  return [
-    "Debug:",
-    ...JSON.stringify(debug, null, 2)
-      .split("\n")
-      .map((line) => `  ${line}`),
-  ].join("\n");
 }
 
 function isRunning(result: WorkflowResult): boolean {
@@ -309,10 +254,6 @@ function renderSingleExpanded(result: WorkflowResult): string {
   if (run.error || run.stderr.trim()) {
     if (lines.length) lines.push("");
     pushBlock(lines, "Error", run.error || run.stderr.trim());
-  }
-  if (run.debug) {
-    if (lines.length) lines.push("");
-    lines.push(renderDebug(run.debug));
   }
   return lines.join("\n").trimEnd();
 }
@@ -475,24 +416,25 @@ export function hasExpandableContent(result: WorkflowResult): boolean {
   );
 }
 
-export function renderDetails(
-  details: WorkflowResult | { diagnostics: AgentIssue[] } | undefined,
-  expanded: boolean,
-): string {
-  if (!details) return "";
-  return "diagnostics" in details
-    ? renderBlockingDiagnostics(details.diagnostics)
-    : renderWorkflow(details, expanded);
+export function renderDiagnosticDetails(diagnostics: AgentIssue[] | undefined): string {
+  if (!diagnostics) return "";
+  return renderBlockingDiagnostics(diagnostics);
 }
 
-export function getResultColor(
-  details: WorkflowResult | { diagnostics: AgentIssue[] } | undefined,
+export function getDiagnosticResultColor(
+  diagnostics: AgentIssue[] | undefined,
   isError?: boolean,
 ): "error" | "warning" | "toolOutput" {
   if (isError) return "error";
-  if (!details) return "toolOutput";
-  if ("diagnostics" in details) {
-    return details.diagnostics.some((item) => item.level === "error") ? "error" : "warning";
-  }
-  return hasFailedRun(details) ? "error" : "toolOutput";
+  if (!diagnostics) return "toolOutput";
+  return diagnostics.some((item) => item.level === "error") ? "error" : "warning";
+}
+
+export function getWorkflowResultColor(
+  result: WorkflowResult | undefined,
+  isError?: boolean,
+): "error" | "toolOutput" {
+  if (isError) return "error";
+  if (!result) return "toolOutput";
+  return hasFailedRun(result) ? "error" : "toolOutput";
 }

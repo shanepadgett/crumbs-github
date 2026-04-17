@@ -11,7 +11,6 @@ Rendering covers:
 - collapsed and expanded workflow result blocks
 - diagnostic reports
 - command-visible messages
-- debug output rendering
 
 ## Requirements
 
@@ -61,7 +60,6 @@ Rendering covers:
 - Expanded single result SHALL include ordered tool activity lines when activities exist.
 - Expanded single result SHALL include `Response` section for successful completed output.
 - Expanded single result SHALL include `Error` section when run error or stderr exists.
-- Expanded single result SHALL include `Debug` section when debug payload exists.
 
 ### Multi-Item Collapsed Rendering
 
@@ -102,42 +100,33 @@ Rendering covers:
 - Thrown blocking summary SHALL begin with `Subagent run blocked by agent definition errors:`.
 - Thrown blocking summary SHALL include up to first five issue messages.
 - If more than five issue messages exist, thrown blocking summary SHALL append `... N more` line.
-- Thrown blocking summary SHALL end with `Run /subagent doctor.`.
+- Thrown blocking summary SHALL end with `Run /subagents doctor.`.
 
 ### List Command Rendering
 
-- `/subagent list` output SHALL begin with heading `subagents`.
-- If no agents are found, `/subagent list` SHALL render `No agents found.`.
-- If agents are present, `/subagent list` SHALL group rows by `Project`, `User`, `Built-in`, and `Path`.
+- `/subagents list` output SHALL begin with heading `subagents`.
+- If no agents are found, `/subagents list` SHALL render `No agents found.`.
+- If agents are present, `/subagents list` SHALL group rows by `Project`, `User`, `Built-in`, and `Path`.
 - Each group table SHALL render columns `Name`, `Model`, and `Tools`.
 - Missing model SHALL render as `inherit parent`.
 - Missing tools SHALL render as `inherit parent`.
 
 ### Doctor Command Rendering
 
-- `/subagent doctor` output SHALL begin with heading `subagent doctor`.
-- `/subagent doctor` output SHALL include counts for scanned agents, errors, warnings, and info.
-- If no diagnostics exist, `/subagent doctor` SHALL render `No issues found.`.
-- If diagnostics exist, `/subagent doctor` SHALL list each diagnostic with level, location, and message.
+- `/subagents doctor` output SHALL begin with heading `subagents doctor`.
+- `/subagents doctor` output SHALL include counts for scanned agents, errors, warnings, and info.
+- If no diagnostics exist, `/subagents doctor` SHALL render `No issues found.`.
+- If diagnostics exist, `/subagents doctor` SHALL list each diagnostic with level, location, and message.
 
 ### Startup and Reload Notices
 
 - When startup or reload detects warnings or errors, notice text SHALL identify issue count and phase.
-- Startup or reload notice SHALL tell user to run `/subagent doctor`.
+- Startup or reload notice SHALL tell user to run `/subagents doctor`.
 - If startup or reload diagnostic collection fails, notice text SHALL identify phase and caught error text.
 
-### Command Usage and Debug Status Rendering
+### Command Usage Rendering
 
-- `/subagent debug status` SHALL render `subagent debug: on` or `subagent debug: off`.
-- `/subagent debug on` SHALL enable debug mode and SHALL render current debug status.
-- `/subagent debug off` SHALL disable debug mode and SHALL render current debug status.
-- Unknown command usage SHALL render `Usage: /subagent [list|doctor|create|debug on|off|status]`.
-
-### Debug Rendering
-
-- When run debug payload exists, expanded transcript SHALL include `Debug:` section.
-- Debug section SHALL render pretty-printed structured debug payload.
-- Debug payload MAY include model, thinking level, task, effective system prompt, appended system prompt parts, active tools, available tools, active tool definitions, loaded agents/context files, provider payload, and workflow progress snapshots.
+- Unknown command usage SHALL render `Usage: /subagents [list|doctor|create]`.
 
 ### Result Coloring
 

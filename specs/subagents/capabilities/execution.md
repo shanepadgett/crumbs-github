@@ -61,8 +61,8 @@ Execution covers:
 
 ### Current Empty-Tools Behavior
 
-- Under current parsed behavior, explicit empty `tools` array SHALL become indistinguishable from omitted `tools`.
-- Under current parsed behavior, explicit empty `tools` array SHALL therefore inherit parent active tools rather than disabling tools.
+- Under current parsed behavior for persisted agent files, explicit empty `tools` array SHALL become indistinguishable from omitted `tools`.
+- Under current runtime invocation behavior, explicit empty `tools` array SHALL disable all tools rather than inherit parent active tools.
 
 ### Prompt Construction
 
@@ -150,12 +150,6 @@ Execution covers:
 - For `parallel`, workflow aggregate `output` SHALL concatenate one numbered section per task in original order.
 - Each parallel output section SHALL include task index, agent name, and task output when present.
 - If parallel task output is absent, aggregate output SHALL fall back to run error, trimmed stderr, or literal `(no output)`.
-
-### Workflow Debug Progress
-
-- When debug mode is enabled, workflow progress snapshots SHALL be collected.
-- Progress snapshot SHALL include sequence number, done count, total count, mode, active agent, active tool names, recent tool names, live text, and output preview.
-- Final workflow result MAY include collected progress debug payload.
 
 ## Current Behavioral Notes
 

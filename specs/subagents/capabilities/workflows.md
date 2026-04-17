@@ -37,8 +37,7 @@ Workflows cover:
 
 - A `single` workflow SHALL consist of one `agent` string and one `task` string.
 - A `single` workflow MAY include `cwd` as string.
-- The system SHALL reject `single` workflow when `agent` is missing or not string.
-- The system SHALL reject `single` workflow when `task` is missing or not string.
+- The system SHALL reject malformed `single` workflow when required fields are missing or invalid.
 - The system SHALL reject `single` workflow when `cwd` is present and not string.
 
 ### Chain Workflow Shape
@@ -46,7 +45,7 @@ Workflows cover:
 - A `chain` workflow SHALL consist of non-empty `chain` array.
 - Each chain item SHALL be object with `agent` string and `task` string.
 - Each chain item MAY include `cwd` as string.
-- The system SHALL reject `chain` workflow when `chain` is empty.
+- The system SHALL reject malformed `chain` workflow, including empty `chain` arrays.
 - The system SHALL reject chain item when item is not object.
 - The system SHALL reject chain item when `agent` or `task` is missing or not string.
 - The system SHALL reject chain item when `cwd` is present and not string.
@@ -59,7 +58,7 @@ Workflows cover:
 - Each parallel task MAY include `cwd` as string.
 - Invocation MAY include `concurrency` override.
 - If `concurrency` is provided, it SHALL be finite number.
-- The system SHALL reject `parallel` workflow when `tasks` is empty.
+- The system SHALL reject malformed `parallel` workflow, including empty `tasks` arrays.
 - The system SHALL reject parallel task when item is not object.
 - The system SHALL reject parallel task when `agent` or `task` is missing or not string.
 - The system SHALL reject parallel task when `cwd` is present and not string.
@@ -82,6 +81,7 @@ Workflows cover:
 
 - If workflow references agent name absent from effective registry, the system SHALL reject execution when that run is reached.
 - Unknown-agent failure SHALL include available effective agent names when available.
+- Unknown-agent failure SHALL be distinct from empty-registry guidance.
 
 ### Chain Control Semantics
 

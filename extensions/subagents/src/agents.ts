@@ -6,7 +6,14 @@ import { basename, dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { resolveProjectRoot } from "../../shared/config/project-root.js";
 import { isDirectory } from "../../shared/io/fs.js";
-import type { AgentIssue, AgentRegistry, AgentSource, AgentSpec, Workflow } from "./types.js";
+import {
+  THINKING_LEVEL_VALUES,
+  type AgentIssue,
+  type AgentRegistry,
+  type AgentSource,
+  type AgentSpec,
+  type Workflow,
+} from "./types.js";
 
 type DiscoverOptions = {
   refresh?: boolean;
@@ -22,7 +29,7 @@ type Runtime = {
   allTools: ToolInfo[];
 };
 
-const THINKING_LEVELS = new Set(["off", "minimal", "low", "medium", "high", "xhigh"]);
+const THINKING_LEVELS = new Set<string>(THINKING_LEVEL_VALUES);
 const registryCache = new Map<string, AgentRegistry>();
 
 function getBuiltinAgentsDir(): string {
@@ -286,12 +293,14 @@ async function validateRuntime(agents: AgentSpec[], runtime: Runtime): Promise<A
   const diagnostics: AgentIssue[] = [];
   const toolNames = new Set(runtime.allTools.map((tool) => tool.name));
   let availableModels = { ids: new Set<string>(), keys: new Set<string>() };
+  let modelLookupSucceeded = false;
   try {
     const models = await runtime.modelRegistry.getAvailable();
     availableModels = {
       ids: new Set(models.map((model) => model.id)),
       keys: new Set(models.map((model) => `${model.provider}/${model.id}`)),
     };
+    modelLookupSucceeded = true;
   } catch {}
 
   for (const agent of agents) {
@@ -299,6 +308,7 @@ async function validateRuntime(agents: AgentSpec[], runtime: Runtime): Promise<A
       if (toolNames.has(toolName)) continue;
       diagnostics.push(issue("error", `unknown tool "${toolName}"`, agent.filePath, agent.name));
     }
+    if (!modelLookupSucceeded) continue;
     if (!agent.model) continue;
     const found = agent.model.includes("/")
       ? availableModels.keys.has(agent.model)
@@ -378,15 +388,17 @@ export async function resolveRunnableAgents(
   cwd: string,
   workflow: Workflow,
   runtime: Runtime,
-): Promise<{ agents: AgentSpec[]; diagnostics: AgentIssue[] }> {
+): Promise<{ agents: AgentSpec[]; availableAgentNames: string[]; diagnostics: AgentIssue[] }> {
   const registry = await discoverAgents(cwd, { refresh: true });
   const requestedNames = getWorkflowAgentNames(workflow);
+  const agentsByName = new Map(registry.agents.map((agent) => [agent.name, agent]));
   const requestedAgents = requestedNames
-    .map((name) => registry.agents.find((agent) => agent.name === name))
+    .map((name) => agentsByName.get(name))
     .filter((agent): agent is AgentSpec => Boolean(agent));
   const runtimeDiagnostics = await validateRuntime(requestedAgents, runtime);
   return {
-    agents: registry.agents,
+    agents: requestedAgents,
+    availableAgentNames: registry.agents.map((agent) => agent.name),
     diagnostics: [...filterRequestedDiagnostics(registry, requestedNames), ...runtimeDiagnostics],
   };
 }
@@ -409,7 +421,7 @@ export function formatDiagnosticSummary(diagnostics: AgentIssue[]): string {
   const lines = ["Subagent run blocked by agent definition errors:"];
   for (const item of diagnostics.slice(0, 5)) lines.push(`- ${item.message}`);
   if (diagnostics.length > 5) lines.push(`- ... ${diagnostics.length - 5} more`);
-  lines.push("Run /subagent doctor.");
+  lines.push("Run /subagents doctor.");
   return lines.join("\n");
 }
 
@@ -458,7 +470,7 @@ export function renderDoctorReport(
 ): string {
   const diagnostics = [...registry.diagnostics, ...runtimeDiagnostics];
   const lines = [
-    "subagent doctor",
+    "subagents doctor",
     "",
     `Agents scanned: ${registry.agents.length}`,
     `Errors: ${diagnostics.filter((item) => item.level === "error").length}`,

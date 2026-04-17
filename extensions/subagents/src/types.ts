@@ -1,5 +1,15 @@
+import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
+
 export type AgentSource = "builtin" | "user" | "project" | "path";
-export type AgentThinkingLevel = "off" | "minimal" | "low" | "medium" | "high" | "xhigh";
+export type AgentThinkingLevel = Parameters<ExtensionAPI["setThinkingLevel"]>[0];
+export const THINKING_LEVEL_VALUES: AgentThinkingLevel[] = [
+  "off",
+  "minimal",
+  "low",
+  "medium",
+  "high",
+  "xhigh",
+];
 
 export interface AgentSpec {
   name: string;
@@ -65,7 +75,6 @@ export interface RunResult {
   events: ToolActivity[];
   liveText?: string;
   durationMs?: number;
-  debug?: Record<string, unknown>;
 }
 
 export interface WorkflowTask {
@@ -88,5 +97,4 @@ export interface WorkflowResult {
   done?: number;
   total?: number;
   durationMs?: number;
-  debug?: Record<string, unknown>;
 }

@@ -4,7 +4,6 @@ import {
   SessionManager,
   type AgentSession,
 } from "@mariozechner/pi-coding-agent";
-import { isSubagentDebugEnabled } from "./debug.js";
 import type {
   AgentSpec,
   RunResult,
@@ -29,6 +28,7 @@ type RunAgentOptions = {
 type ExecuteWorkflowOptions = {
   defaultCwd: string;
   agents: AgentSpec[];
+  availableAgentNames?: string[];
   workflow: Workflow;
   parentActiveTools?: string[];
   signal?: AbortSignal;
@@ -54,6 +54,9 @@ type AssistantMessage = {
 export const MAX_PARALLEL_TASKS = 8;
 export const MAX_CONCURRENCY = 4;
 
+type WorkflowItem = WorkflowResult["items"][number];
+type WorkflowTask = { agent: string; task: string; cwd?: string };
+
 function createUsage(): Usage {
   return { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, cost: 0, contextTokens: 0, turns: 0 };
 }
@@ -68,7 +71,6 @@ function cloneRun(run: RunResult): RunResult {
     usage: { ...run.usage },
     activeTools: cloneActivities(run.activeTools),
     events: cloneActivities(run.events),
-    debug: run.debug ? { ...run.debug } : undefined,
   };
 }
 
@@ -167,36 +169,6 @@ function publishRun(
   onUpdate?.(cloneRun(result));
 }
 
-function buildDebugInfo(
-  session: AgentSession,
-  loader: DefaultResourceLoader,
-  task: string,
-  providerPayload: unknown,
-): Record<string, unknown> {
-  const allTools = session.getAllTools();
-  const activeTools = session.getActiveToolNames();
-  const activeToolSet = new Set(activeTools);
-  return {
-    model: session.model?.id,
-    thinkingLevel: session.thinkingLevel,
-    task,
-    systemPrompt: session.agent.state.systemPrompt,
-    appendSystemPromptParts: loader.getAppendSystemPrompt(),
-    activeTools,
-    availableTools: allTools.map((tool) => tool.name),
-    activeToolInfos: allTools
-      .filter((tool) => activeToolSet.has(tool.name))
-      .map((tool) => ({
-        name: tool.name,
-        description: tool.description,
-        parameters: tool.parameters,
-        source: tool.sourceInfo.source,
-      })),
-    agentsFiles: loader.getAgentsFiles().agentsFiles,
-    providerPayload,
-  };
-}
-
 async function runAgent(options: RunAgentOptions): Promise<RunResult> {
   const cwd = options.cwd ?? options.defaultCwd;
   const result: RunResult = {
@@ -220,21 +192,11 @@ async function runAgent(options: RunAgentOptions): Promise<RunResult> {
   let unsubscribe = () => {};
   let abortListener: (() => void) | undefined;
   let aborted = false;
-  let providerPayload: unknown;
   let liveText = "";
   const activeTools = new Map<string, ToolActivity>();
   const events: ToolActivity[] = [];
   const loader = new DefaultResourceLoader({
     cwd,
-    extensionFactories: isSubagentDebugEnabled()
-      ? [
-          (pi) => {
-            pi.on("before_provider_request", (event) => {
-              providerPayload = event.payload;
-            });
-          },
-        ]
-      : [],
     appendSystemPromptOverride: (base) =>
       options.agent.promptText.trim() ? [...base, options.agent.promptText] : base,
   });
@@ -331,10 +293,6 @@ async function runAgent(options: RunAgentOptions): Promise<RunResult> {
     await session.prompt(options.task);
     if (aborted) throw new Error("Subagent was aborted");
 
-    if (isSubagentDebugEnabled()) {
-      result.debug = buildDebugInfo(session, loader, options.task, providerPayload);
-    }
-
     finalizeRun(session, result);
     result.done = true;
     result.durationMs = Date.now() - startedAt;
@@ -342,9 +300,6 @@ async function runAgent(options: RunAgentOptions): Promise<RunResult> {
     return cloneRun(result);
   } catch (error) {
     if (session) finalizeRun(session, result);
-    if (isSubagentDebugEnabled() && session) {
-      result.debug = buildDebugInfo(session, loader, options.task, providerPayload);
-    }
     result.error = error instanceof Error ? error.message : String(error);
     result.exitCode = 1;
     result.done = true;
@@ -360,11 +315,15 @@ async function runAgent(options: RunAgentOptions): Promise<RunResult> {
   }
 }
 
-function resolveAgent(agents: AgentSpec[], name: string): AgentSpec {
+function resolveAgent(
+  agents: AgentSpec[],
+  name: string,
+  availableAgentNames?: string[],
+): AgentSpec {
   const agent = agents.find((item) => item.name === name);
   if (agent) return agent;
   throw new Error(
-    `Unknown agent: "${name}". Available agents: ${agents.map((item) => item.name).join(", ") || "none"}.`,
+    `Unknown agent: "${name}". Available agents: ${availableAgentNames?.join(", ") || agents.map((item) => item.name).join(", ") || "none"}.`,
   );
 }
 
@@ -375,6 +334,27 @@ function buildTaskPrompt(task: string): string {
 function buildChainPrompt(task: string, handoff?: string): string {
   if (!handoff) return buildTaskPrompt(task);
   return ["Task:", task.trim(), "", "Received handoff:", "```text", handoff, "```"].join("\n");
+}
+
+function buildWorkflowItems(workflow: Workflow): WorkflowItem[] {
+  if (workflow.mode === "single") return [{ agent: workflow.agent, prompt: workflow.task }];
+  return (workflow.mode === "chain" ? workflow.chain : workflow.tasks).map((item) => ({
+    agent: item.agent,
+    prompt: item.task,
+  }));
+}
+
+function buildSequentialTasks(
+  workflow: Extract<Workflow, { mode: "single" | "chain" }>,
+): WorkflowTask[] {
+  if (workflow.mode === "single") {
+    return [{ agent: workflow.agent, task: workflow.task, cwd: workflow.cwd }];
+  }
+  return workflow.chain;
+}
+
+function shouldStopChain(run: RunResult): boolean {
+  return run.exitCode !== 0 || run.stopReason === "error" || run.stopReason === "aborted";
 }
 
 function sumUsage(runs: RunResult[]): Usage {
@@ -408,6 +388,26 @@ function cloneRuns(runs: RunResult[]): RunResult[] {
   return runs.map(cloneRun);
 }
 
+function createWorkflowResult(
+  mode: WorkflowResult["mode"],
+  items: WorkflowItem[],
+  runs: RunResult[],
+  startedAt: number,
+  done: number,
+  total: number,
+): WorkflowResult {
+  return {
+    mode,
+    items,
+    runs: cloneRuns(runs),
+    output: buildWorkflowOutput(mode, runs),
+    usage: sumUsage(runs),
+    done,
+    total,
+    durationMs: Date.now() - startedAt,
+  };
+}
+
 async function mapWithConcurrencyLimit<T>(
   items: T[],
   concurrency: number,
@@ -429,61 +429,18 @@ async function mapWithConcurrencyLimit<T>(
 
 export async function executeWorkflow(options: ExecuteWorkflowOptions): Promise<WorkflowResult> {
   const startedAt = Date.now();
-  const items =
-    options.workflow.mode === "single"
-      ? [{ agent: options.workflow.agent, prompt: options.workflow.task }]
-      : options.workflow.mode === "chain"
-        ? options.workflow.chain.map((item) => ({ agent: item.agent, prompt: item.task }))
-        : options.workflow.tasks.map((item) => ({ agent: item.agent, prompt: item.task }));
-  const debugProgress: Record<string, unknown>[] = [];
-  let seq = 0;
-  const recordDebugProgress = (result: WorkflowResult): WorkflowResult => {
-    if (!isSubagentDebugEnabled()) return result;
-    const active = result.runs.at(-1);
-    debugProgress.push({
-      seq: ++seq,
-      done: result.done ?? 0,
-      total: result.total ?? 0,
-      mode: result.mode,
-      activeAgent: active?.agent,
-      activeTools: active?.activeTools.map((item) => item.name) ?? [],
-      recentTools: active?.events.slice(-5).map((item) => item.name) ?? [],
-      liveText: active?.liveText,
-      outputPreview: active?.output,
-    });
-    return { ...result, debug: { progress: debugProgress.map((item) => ({ ...item })) } };
-  };
-
+  const items = buildWorkflowItems(options.workflow);
   const emit = (mode: WorkflowResult["mode"], runs: RunResult[], done: number, total: number) => {
     if (!options.onUpdate) return;
-    const result: WorkflowResult = {
-      mode,
-      items,
-      runs: cloneRuns(runs),
-      output: buildWorkflowOutput(mode, runs),
-      usage: sumUsage(runs),
-      done,
-      total,
-      durationMs: Date.now() - startedAt,
-    };
-    options.onUpdate(recordDebugProgress(result));
+    options.onUpdate(createWorkflowResult(mode, items, runs, startedAt, done, total));
   };
 
   if (options.workflow.mode !== "parallel") {
-    const tasks =
-      options.workflow.mode === "single"
-        ? [
-            {
-              agent: options.workflow.agent,
-              task: options.workflow.task,
-              cwd: options.workflow.cwd,
-            },
-          ]
-        : options.workflow.chain;
+    const tasks = buildSequentialTasks(options.workflow);
     const runs: RunResult[] = [];
     let handoff = "";
     for (const [index, task] of tasks.entries()) {
-      const agent = resolveAgent(options.agents, task.agent);
+      const agent = resolveAgent(options.agents, task.agent, options.availableAgentNames);
       const prompt = task.task;
       const receivedHandoff = options.workflow.mode === "chain" ? handoff || undefined : undefined;
       const effectiveTask =
@@ -504,23 +461,18 @@ export async function executeWorkflow(options: ExecuteWorkflowOptions): Promise<
       runs.push(run);
       handoff = run.output;
       emit(options.workflow.mode, runs, index + 1, tasks.length);
-      if (
-        options.workflow.mode === "chain" &&
-        (run.exitCode !== 0 || run.stopReason === "error" || run.stopReason === "aborted")
-      ) {
+      if (options.workflow.mode === "chain" && shouldStopChain(run)) {
         break;
       }
     }
-    return recordDebugProgress({
-      mode: options.workflow.mode,
+    return createWorkflowResult(
+      options.workflow.mode,
       items,
       runs,
-      output: buildWorkflowOutput(options.workflow.mode, runs),
-      usage: sumUsage(runs),
-      done: runs.length,
-      total: tasks.length,
-      durationMs: Date.now() - startedAt,
-    });
+      startedAt,
+      runs.length,
+      tasks.length,
+    );
   }
 
   const total = options.workflow.tasks.length;
@@ -538,7 +490,7 @@ export async function executeWorkflow(options: ExecuteWorkflowOptions): Promise<
   await mapWithConcurrencyLimit(options.workflow.tasks, concurrency, async (task, index) => {
     const run = await runAgent({
       defaultCwd: options.defaultCwd,
-      agent: resolveAgent(options.agents, task.agent),
+      agent: resolveAgent(options.agents, task.agent, options.availableAgentNames),
       prompt: task.task,
       task: buildTaskPrompt(task.task),
       cwd: task.cwd,
@@ -565,14 +517,5 @@ export async function executeWorkflow(options: ExecuteWorkflowOptions): Promise<
   });
 
   const runs = slots.filter((item): item is RunResult => Boolean(item));
-  return recordDebugProgress({
-    mode: "parallel",
-    items,
-    runs,
-    output: buildWorkflowOutput("parallel", runs),
-    usage: sumUsage(runs),
-    done,
-    total,
-    durationMs: Date.now() - startedAt,
-  });
+  return createWorkflowResult("parallel", items, runs, startedAt, done, total);
 }

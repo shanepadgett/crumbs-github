@@ -1,0 +1,9 @@
+{
+  "name": "@crumbs-pi/subagents",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "pi": {
+    "extensions": ["./subagents.ts"]
+  }
+}

@@ -2,7 +2,7 @@
 
 ## Overview
 
-Creation defines interactive `/subagent create` behavior for cloning existing agents and generating new agents.
+Creation defines interactive `/subagents create` behavior for cloning existing agents and generating new agents.
 
 Creation covers:
 
@@ -20,20 +20,20 @@ Creation covers:
 
 ### Command Availability
 
-- The system SHALL expose `/subagent create` under subagent command set.
-- `/subagent create` SHALL require interactive UI.
-- When interactive UI is unavailable, the system SHALL reject `/subagent create` with message stating that interactive mode is required.
+- The system SHALL expose `/subagents create` under subagents command set.
+- `/subagents create` SHALL require interactive UI.
+- When interactive UI is unavailable, the system SHALL reject `/subagents create` with message stating that interactive mode is required.
 
 ### Registry Preconditions
 
-- `/subagent create` SHALL load current discovered registry at flow start.
-- `/subagent create` SHALL load available tool names from runtime.
-- `/subagent create` SHALL load available model identifiers from current model registry.
-- Under current behavior, if discovered registry contains zero agents, `/subagent create` SHALL stop and SHALL show `No agents found` message even though `new` flow could theoretically proceed.
+- `/subagents create` SHALL load current discovered registry at flow start.
+- `/subagents create` SHALL load available tool names from runtime.
+- `/subagents create` SHALL load available model identifiers from current model registry.
+- Under current behavior, if discovered registry contains zero agents, `/subagents create` SHALL stop and SHALL show `No agents found` message even though `new` flow could theoretically proceed.
 
 ### Top-Level Mode Selection
 
-- `/subagent create` SHALL present exactly two top-level modes: `new` and `clone`.
+- `/subagents create` SHALL present exactly two top-level modes: `new` and `clone`.
 - If user cancels top-level mode selection, the system SHALL exit create flow without side effects.
 
 ### Shared Destination Scope Rules
@@ -49,6 +49,8 @@ Creation covers:
 - Creation flows SHALL allow thinking mode `inherit parent` or explicit thinking level.
 - Creation flows SHALL allow tools mode `inherit parent active tools` or explicit selected tools.
 - Explicit thinking choices SHALL be limited to `off`, `minimal`, `low`, `medium`, `high`, and `xhigh`.
+- When inherit is selected in tools picker, explicit selected tools SHALL be cleared.
+- When explicit tool is selected while inherit is active, inherit SHALL be cleared.
 
 ### Clone Flow Entry
 
@@ -104,7 +106,7 @@ Creation covers:
 - Generation SHALL request JSON object only.
 - Generated object SHALL contain `name`, `description`, and `prompt`.
 - Generated `name` SHALL match lowercase file-friendly pattern `^[a-z0-9][a-z0-9-]*$`.
-- Generated `description` SHALL be non-empty string.
+- Generated `description` SHALL be non-empty terse string.
 - Generated `prompt` SHALL be non-empty string.
 - Generated `prompt` SHALL NOT include Markdown code fences.
 - Generated `prompt` SHALL NOT begin with YAML frontmatter delimiter.

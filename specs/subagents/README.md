@@ -19,7 +19,7 @@ That is deliberate. Current truth first. Cleanup decisions later.
 - [Execution](./capabilities/execution.md)
 - [Rendering](./capabilities/rendering.md)
 - [Creation](./capabilities/creation.md)
-- [Lifecycle and Debug](./capabilities/lifecycle-and-debug.md)
+- [Lifecycle](./capabilities/lifecycle.md)
 
 ## Terms
 
@@ -33,7 +33,7 @@ That is deliberate. Current truth first. Cleanup decisions later.
 
 ## Scope
 
-- This specification SHALL cover built-in command behavior, tool behavior, interactive create behavior, registry behavior, runtime execution semantics, rendering behavior, lifecycle hooks, and debug behavior.
+- This specification SHALL cover built-in command behavior, tool behavior, interactive create behavior, registry behavior, runtime execution semantics, rendering behavior, and lifecycle hooks.
 - This specification SHALL describe current behavior for built-in, user, project, and path-scoped agent discovery.
 - This specification SHALL describe current behavior for successful flows, validation failures, runtime failures, and abort flows.
 - This specification SHALL NOT prescribe implementation decomposition, module boundaries, or refactor strategy.
@@ -44,8 +44,8 @@ That is deliberate. Current truth first. Cleanup decisions later.
 - Workflows SHALL define invocation shapes, workflow-level validation, and workflow-level control semantics.
 - Execution SHALL define isolated run behavior, model/thinking/tools application, activity capture, result aggregation, and failure semantics.
 - Rendering SHALL define user-visible labels, progress summaries, expanded results, diagnostics rendering, and command-visible text surfaces.
-- Creation SHALL define `/subagent create` user flows, generation contract, collision handling, write behavior, and current limitations.
-- Lifecycle and Debug SHALL define startup, reload, shutdown, debug toggles, environment influence, and debug payload visibility.
+- Creation SHALL define `/subagents create` user flows, generation contract, collision handling, write behavior, and current limitations.
+- Lifecycle SHALL define startup, reload, shutdown, and command refresh touchpoints.
 
 ## Conformance Notes
 

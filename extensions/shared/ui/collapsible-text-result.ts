@@ -7,10 +7,12 @@ export interface RenderCollapsibleTextResultOptions {
   collapsedText: string;
   expandedText?: string;
   footer?: string;
+  bodyColor?: "error" | "toolOutput";
+  footerColor?: "error" | "toolOutput";
 }
 
 export function renderCollapsibleTextResult(
-  theme: { fg(color: "muted" | "toolOutput", text: string): string },
+  theme: { fg(color: "muted" | "error" | "toolOutput", text: string): string },
   options: RenderCollapsibleTextResultOptions,
 ): Text {
   const body = options.expanded
@@ -20,15 +22,17 @@ export function renderCollapsibleTextResult(
   const hint = isExpandable
     ? keyHint("app.tools.expand", options.expanded ? "to collapse" : "to expand")
     : "";
+  const bodyColor = options.bodyColor ?? "toolOutput";
+  const footerColor = options.footerColor ?? bodyColor;
   const footer = options.footer?.trim();
   const footerLine = footer
     ? hint
-      ? `${theme.fg("toolOutput", footer)}  ${theme.fg("muted", hint)}`
-      : theme.fg("toolOutput", footer)
+      ? `${theme.fg(footerColor, footer)}  ${theme.fg("muted", hint)}`
+      : theme.fg(footerColor, footer)
     : hint
       ? theme.fg("muted", hint)
       : "";
-  const bodyText = theme.fg("toolOutput", body);
+  const bodyText = theme.fg(bodyColor, body);
   const separator = options.expanded ? "\n\n" : "\n";
   const content =
     bodyText && footerLine

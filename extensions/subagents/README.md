@@ -5,10 +5,9 @@ Runs isolated subagent workflows in-process on top of Pi SDK sessions.
 ## What it provides
 
 - strict agent discovery from Markdown files with YAML frontmatter
-- runtime validation with `/subagent list` and `/subagent doctor`
+- runtime validation with `/subagents list` and `/subagents doctor`
 - `subagent` tool with `single`, `chain`, and `parallel` modes
 - starter agents: `scout`, `planner`, `reviewer`, `worker`
-- optional debug capture with `/subagent debug`
 
 ## Architecture
 
@@ -37,7 +36,7 @@ Precedence:
 - built-in < user < project
 - later source shadows earlier source
 - same-scope duplicate names are errors
-- cross-scope shadowing is info in `/subagent doctor`
+- cross-scope shadowing is info in `/subagents doctor`
 
 Override pattern:
 
@@ -90,13 +89,10 @@ Validation notes:
 
 ## Commands
 
-- `/subagent list` — show discovered agents
-- `/subagent doctor` — show discovery and runtime diagnostics
-- `/subagent debug on` — enable debug capture
-- `/subagent debug off` — disable debug capture
-- `/subagent debug status` — show current debug status
+- `/subagents list` — show discovered agents
+- `/subagents doctor` — show discovery and runtime diagnostics
 
-If startup or reload finds agent issues, extension emits notice telling you to run `/subagent doctor`.
+If startup or reload finds agent issues, extension emits notice telling you to run `/subagents doctor`.
 
 ## Tool shapes
 
@@ -155,22 +151,3 @@ Parallel limits:
 
 - max tasks: `8`
 - max concurrency: `4`
-
-## Debug mode
-
-Debug capture is controlled by slash command or environment variable, not tool parameters.
-
-- enable with `/subagent debug on`
-- disable with `/subagent debug off`
-- inspect with `/subagent debug status`
-- optional default at process start: `CRUMBS_SUBAGENT_DEBUG=1`
-- not exposed in `subagent` tool schema, so model cannot opt into it through tool arguments
-
-When enabled, expanded subagent output includes:
-
-- effective system prompt
-- active and available tools
-- active tool definitions
-- loaded AGENTS/context files
-- progress debug snapshots
-- captured provider payload when available
