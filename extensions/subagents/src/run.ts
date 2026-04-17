@@ -199,6 +199,12 @@ async function runAgent(options: RunAgentOptions): Promise<RunResult> {
     cwd,
     appendSystemPromptOverride: (base) =>
       options.agent.promptText.trim() ? [...base, options.agent.promptText] : base,
+    extensionsOverride: (base) => ({
+      ...base,
+      extensions: base.extensions.filter(
+        (extension) => !extension.resolvedPath.includes("/extensions/notify/"),
+      ),
+    }),
   });
 
   try {
