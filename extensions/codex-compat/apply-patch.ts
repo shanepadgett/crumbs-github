@@ -42,7 +42,9 @@ function buildCompatPromptDelta(): string {
   return [
     "Codex compatibility mode is active for this model.",
     "- Keep using builtin read and bash for file reads and command execution.",
-    "- Prefer apply_patch for edits, file creation, file deletion, moves, and coordinated multi-file changes.",
+    "- Use apply_patch for edits, file creation, file deletion, moves, and coordinated multi-file changes. Treat this as required, not preference.",
+    "- Only skip apply_patch in very rare cases where a deterministic scripted transformation via tools like python3 or node materially reduces token usage or risk.",
+    "- Never use cat, echo, printf, here-docs, perl, sed, or similar shell/file-manipulation shortcuts to write or rewrite files when apply_patch can express change.",
     "- For apply_patch, send either a raw patch body or an explicit apply_patch/applypatch invocation.",
     "- Patch grammar: *** Begin Patch / *** End Patch with Add/Update/Delete File sections, optional *** Move to, optional *** End of File for EOF-sensitive update chunks.",
     "- For Add File sections, only lines prefixed with + are file content.",
@@ -521,7 +523,9 @@ export default function codexCompatApplyPatchExtension(pi: ExtensionAPI) {
       "Apply a multi-file patch with Codex-compatible parsing and matching. Accepts raw patch bodies and explicit apply_patch/applypatch invocation forms.",
     promptSnippet: "Apply focused multi-file text patches",
     promptGuidelines: [
-      "Use apply_patch for file edits, file creation, file deletion, and coordinated multi-file changes.",
+      "Use apply_patch for file edits, file creation, file deletion, moves, and coordinated multi-file changes. Treat this as required unless a rare deterministic scripted transform is clearly better.",
+      "Do not use cat, echo, printf, here-docs, perl, sed, or similar shell shortcuts to create or modify files when apply_patch can express change.",
+      "Only bypass apply_patch for unusual deterministic file rewrites via tools like python3 or node when that materially reduces tokens or patch risk.",
       "Patch bodies use *** Begin Patch / *** End Patch and Add/Update/Delete File sections.",
       "In Add File sections, only + lines are treated as content.",
       "Use *** End of File in update chunks when the match should be EOF-sensitive.",
