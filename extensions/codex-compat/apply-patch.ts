@@ -1,7 +1,8 @@
 import type { Model } from "@mariozechner/pi-ai";
-import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
+import { keyHint, type ExtensionAPI } from "@mariozechner/pi-coding-agent";
 import { Text } from "@mariozechner/pi-tui";
 import { Type } from "@sinclair/typebox";
+import { truncateMultilineText } from "../shared/ui/collapsible-text-result.js";
 import { applyPatch, type ApplyPatchSummary } from "./src/patch-executor.js";
 import { getCodexCompatCapabilities } from "./src/capabilities.js";
 
@@ -21,6 +22,15 @@ interface ToolInfo {
   sourceInfo: {
     source: string;
   };
+}
+
+interface PatchPreviewOperation {
+  sectionIndex: number;
+  kind: "add" | "update" | "delete";
+  path: string;
+  moveTo?: string;
+  linesAdded: number;
+  linesRemoved: number;
 }
 
 function sameToolSet(a: string[], b: string[]): boolean {
@@ -67,10 +77,46 @@ function stripCompatTools(activeTools: string[]): string[] {
   return activeTools.filter((toolName) => !COMPAT_TOOL_NAMES.has(toolName));
 }
 
-function countPatchSections(input: string | undefined): number {
-  if (typeof input !== "string") return 0;
-  const normalized = input.replace(/\r\n/g, "\n");
-  return (normalized.match(/^\*\*\* (?:Add|Update|Delete) File: /gm) ?? []).length;
+function parsePatchPreview(input: string | undefined): PatchPreviewOperation[] {
+  if (typeof input !== "string") return [];
+
+  const operations: PatchPreviewOperation[] = [];
+  const lines = input.replace(/\r\n/g, "\n").split("\n");
+  let current: PatchPreviewOperation | undefined;
+
+  for (const line of lines) {
+    const section = line.match(/^\*\*\* (Add|Update|Delete) File: (.+)$/);
+    if (section) {
+      current = {
+        sectionIndex: operations.length + 1,
+        kind: section[1] === "Add" ? "add" : section[1] === "Delete" ? "delete" : "update",
+        path: section[2],
+        linesAdded: 0,
+        linesRemoved: 0,
+      };
+      operations.push(current);
+      continue;
+    }
+
+    if (!current) continue;
+
+    const move = line.match(/^\*\*\* Move to: (.+)$/);
+    if (move && current.kind === "update") {
+      current.moveTo = move[1];
+      continue;
+    }
+
+    if (current.kind === "add") {
+      if (line.startsWith("+")) current.linesAdded += 1;
+      continue;
+    }
+
+    if (current.kind !== "update") continue;
+    if (line.startsWith("+")) current.linesAdded += 1;
+    else if (line.startsWith("-")) current.linesRemoved += 1;
+  }
+
+  return operations;
 }
 
 function formatBadge(summary: ApplyPatchSummary): string {
@@ -90,50 +136,291 @@ function stripRedundantPathTail(message: string, path?: string): string {
     .trim();
 }
 
-function renderApplyPatchCall(args: any, theme: any) {
-  const count = countPatchSections(args?.input);
-  const label = `${count || 0} file${count === 1 ? "" : "s"}`;
-  return new Text(
-    `${theme.fg("toolTitle", theme.bold("apply_patch"))} ${theme.fg("accent", label)}`,
-    0,
-    0,
-  );
+function collectPreviewTouchedFiles(preview: PatchPreviewOperation[]): number {
+  const paths = new Set<string>();
+  for (const operation of preview) {
+    paths.add(operation.moveTo ?? operation.path);
+  }
+  return paths.size;
 }
 
-function renderApplyPatchResult(result: any, options: { expanded: boolean }, theme: any) {
-  const summary = result.details as ApplyPatchSummary | undefined;
-  if (!summary) return new Text("", 0, 0);
+function collectTouchedFiles(summary: ApplyPatchSummary): number {
+  const paths = new Set<string>();
+  for (const change of summary.changes) {
+    paths.add(change.move?.to ?? change.path);
+  }
+  return paths.size;
+}
 
-  const badge = formatBadge(summary);
-  const header =
-    summary.status === "failed"
-      ? "No changes applied."
-      : `${badge ? `[${badge}] ` : ""}Applied ${summary.completedOperations}/${summary.totalOperations} sections`;
+function formatHeaderStats(
+  summary: ApplyPatchSummary | undefined,
+  preview: PatchPreviewOperation[],
+): string {
+  const fileCount = summary ? collectTouchedFiles(summary) : collectPreviewTouchedFiles(preview);
+  const linesAdded = summary
+    ? summary.linesAdded
+    : preview.reduce((sum, item) => sum + item.linesAdded, 0);
+  const linesRemoved = summary
+    ? summary.linesRemoved
+    : preview.reduce((sum, item) => sum + item.linesRemoved, 0);
+  const moves = summary
+    ? summary.moved.length
+    : preview.filter((item) => item.kind === "update" && item.moveTo).length;
+  const stats = [
+    linesAdded > 0 ? `+${linesAdded}` : "",
+    linesRemoved > 0 ? `-${linesRemoved}` : "",
+    moves > 0 ? `>${moves}` : "",
+  ].filter(Boolean);
 
-  if (!options.expanded) {
-    return new Text(theme.fg("muted", header), 0, 0);
+  return `${fileCount} file${fileCount === 1 ? "" : "s"}${stats.length > 0 ? ` · ${stats.join(" ")}` : ""}`;
+}
+
+function renderApplyPatchCall(args: any, theme: any, context: any) {
+  const preview = parsePatchPreview(args?.input);
+  const summary = context?.state?.latestSummary as ApplyPatchSummary | undefined;
+  const label = formatHeaderStats(summary, preview);
+  const lines = [
+    `${theme.fg("toolTitle", theme.bold("apply_patch"))} ${theme.fg("accent", label)}`,
+  ];
+
+  if (context?.expanded && !context?.executionStarted) {
+    const rawPatch =
+      typeof args?.input === "string" ? args.input.replace(/\r\n/g, "\n").trim() : "";
+    if (rawPatch) lines.push(theme.fg("toolOutput", rawPatch));
+  } else if (!context?.executionStarted) {
+    const previewText = buildCollapsedPreview(preview, summary);
+    if (previewText) lines.push(theme.fg("toolOutput", previewText));
   }
 
-  const lines = [theme.fg("muted", header)];
-  for (const path of summary.added) lines.push(theme.fg("toolOutput", `A ${path}`));
-  for (const path of summary.updated) lines.push(theme.fg("toolOutput", `M ${path}`));
-  for (const path of summary.deleted) lines.push(theme.fg("toolOutput", `D ${path}`));
-  for (const move of summary.moved) {
-    lines.push(theme.fg("toolOutput", `R ${move.from} -> ${move.to}`));
+  return new Text(lines.join("\n"), 0, 0);
+}
+
+function renderChangeLine(change: ApplyPatchSummary["changes"][number]): string {
+  if (change.move) return `Moving ${change.move.from} -> ${change.move.to}`;
+  if (change.kind === "add") return `Adding ${change.path}`;
+  if (change.kind === "delete") return `Deleting ${change.path}`;
+  return `Editing ${change.path}`;
+}
+
+function renderFailureLine(failure: ApplyPatchSummary["failures"][number]): string {
+  const kind = failure.kind ? `${failure.kind} ` : "";
+  const path = failure.path ? `${failure.path}` : "";
+  const chunk =
+    failure.chunkIndex && failure.totalChunks
+      ? ` chunk ${failure.chunkIndex}/${failure.totalChunks}`
+      : "";
+  const context = failure.contextHint ? ` (context: "${failure.contextHint}")` : "";
+  const reason = stripRedundantPathTail(failure.message, failure.path);
+  return `Failed: ${kind}${path}${chunk}: ${reason}${context}`.trim();
+}
+
+function formatPreviewOperation(operation: PatchPreviewOperation): string {
+  if (operation.kind === "add") return `Adding ${operation.path}`;
+  if (operation.kind === "delete") return `Deleting ${operation.path}`;
+  if (operation.moveTo) return `Moving ${operation.path} -> ${operation.moveTo}`;
+  return `Editing ${operation.path}`;
+}
+
+function formatSettledOperation(operation: PatchPreviewOperation): string {
+  if (operation.kind === "add") return `Added ${operation.path}`;
+  if (operation.kind === "delete") return `Deleted ${operation.path}`;
+  if (operation.moveTo) return `Moved ${operation.path} -> ${operation.moveTo}`;
+  return `Edited ${operation.path}`;
+}
+
+function buildSectionStatuses(summary: ApplyPatchSummary | undefined) {
+  const applied = new Set<number>();
+  const failed = new Map<number, string>();
+
+  if (!summary) {
+    return { applied, failed };
+  }
+
+  for (const change of summary.changes) {
+    applied.add(change.sectionIndex);
   }
   for (const failure of summary.failures) {
-    const kind = failure.kind ? `${failure.kind} ` : "";
-    const path = failure.path ? `${failure.path}` : "";
-    const chunk =
-      failure.chunkIndex && failure.totalChunks
-        ? ` chunk ${failure.chunkIndex}/${failure.totalChunks}`
-        : "";
-    const context = failure.contextHint ? ` (context: "${failure.contextHint}")` : "";
-    const reason = stripRedundantPathTail(failure.message, failure.path);
-    lines.push(theme.fg("warning", `! ${kind}${path}${chunk}: ${reason}${context}`.trim()));
+    if (failure.sectionIndex) failed.set(failure.sectionIndex, renderFailureLine(failure));
   }
 
-  return new Text(`\n${lines.join("\n")}`, 0, 0);
+  return { applied, failed };
+}
+
+function buildPreviewRows(
+  preview: PatchPreviewOperation[],
+  summary: ApplyPatchSummary | undefined,
+): string[] {
+  const { applied, failed } = buildSectionStatuses(summary);
+
+  return preview.map((operation) => {
+    const base = formatPreviewOperation(operation);
+    const failure = failed.get(operation.sectionIndex);
+    if (failure) return `${base} · failed`;
+    if (applied.has(operation.sectionIndex)) return `${base} · applied`;
+    return `${base} · pending`;
+  });
+}
+
+function buildCollapsedPreview(
+  preview: PatchPreviewOperation[],
+  summary: ApplyPatchSummary | undefined,
+): string {
+  const lines = buildPreviewRows(preview, summary);
+  if (lines.length === 0) return "";
+
+  const maxLines = 3;
+  const visible = lines.slice(-maxLines).map((line) => truncateMultilineText(line, 1, 120));
+  const hidden = lines.length - visible.length;
+  if (hidden > 0) visible.push(`... +${hidden} more`);
+  return visible.join("\n");
+}
+
+function buildExpandedResult(preview: PatchPreviewOperation[], summary: ApplyPatchSummary): string {
+  const { applied, failed } = buildSectionStatuses(summary);
+  const lines: Array<{ label: string; status: "applied" | "failed" }> = [];
+  for (const operation of preview) {
+    if (failed.has(operation.sectionIndex)) {
+      lines.push({ label: formatSettledOperation(operation), status: "failed" });
+      continue;
+    }
+    if (applied.has(operation.sectionIndex)) {
+      lines.push({ label: formatSettledOperation(operation), status: "applied" });
+    }
+  }
+  if (lines.length === 0) return "";
+  return ["Result:", ...lines.map((line) => `${line.label}\t${line.status}`)].join("\n");
+}
+
+function buildCollapsedActivity(summary: ApplyPatchSummary): string {
+  const lines = [
+    ...summary.changes.map(renderChangeLine),
+    ...summary.failures.map(renderFailureLine),
+  ];
+  if (lines.length === 0) {
+    return summary.status === "failed" ? "No changes applied." : "Waiting for patch activity...";
+  }
+
+  const maxLines = 3;
+  const visible = lines.slice(-maxLines).map((line) => truncateMultilineText(line, 1, 120));
+  const hidden = lines.length - visible.length;
+  if (hidden > 0) visible.push(`... +${hidden} more`);
+  return visible.join("\n");
+}
+
+function buildExpandedPatchText(_summary: ApplyPatchSummary, input: string | undefined): string {
+  const normalizedInput = typeof input === "string" ? input.replace(/\r\n/g, "\n").trim() : "";
+  return normalizedInput;
+}
+
+function formatStatus(theme: any, status: "pending" | "applied" | "failed"): string {
+  if (status === "applied") return theme.fg("success", theme.bold("applied"));
+  if (status === "failed") return theme.fg("error", theme.bold("failed"));
+  return theme.fg("muted", "pending");
+}
+
+function renderBodyWithFooter(theme: any, body: string, expanded: boolean): Text {
+  const hint = theme.fg(
+    "muted",
+    keyHint("app.tools.expand", expanded ? "to collapse" : "to expand"),
+  );
+  const content = body ? `${body}\n${hint}` : hint;
+  return new Text(content, 0, 0);
+}
+
+function renderCollapsedResultText(
+  theme: any,
+  preview: PatchPreviewOperation[],
+  summary: ApplyPatchSummary,
+): string {
+  const lines = buildPreviewRows(preview, summary);
+  if (lines.length === 0) return theme.fg("toolOutput", buildCollapsedActivity(summary));
+
+  const maxLines = 3;
+  const visible = lines.slice(-maxLines).map((line) => truncateMultilineText(line, 1, 120));
+  const hidden = lines.length - visible.length;
+  const rendered = visible.map((line) => {
+    const [label, status] = line.split(" · ");
+    return `${theme.fg("toolOutput", label)} ${formatStatus(theme, status as "pending" | "applied" | "failed")}`;
+  });
+  if (hidden > 0) rendered.push(theme.fg("muted", `... +${hidden} more`));
+  return rendered.join("\n");
+}
+
+function renderExpandedResultText(
+  theme: any,
+  preview: PatchPreviewOperation[],
+  summary: ApplyPatchSummary,
+  input: string | undefined,
+): string {
+  const settled = buildExpandedResult(preview, summary);
+  const sections: string[] = [];
+  const patchText = buildExpandedPatchText(summary, input);
+  if (patchText) sections.push(theme.fg("toolOutput", patchText));
+  if (settled) {
+    const lines = settled.split("\n") as string[];
+    const [title, ...rest] = lines;
+    sections.push(
+      [
+        theme.fg("muted", title),
+        ...rest.map((line: string) => {
+          const [label, status] = line.split("\t");
+          return `${theme.fg("toolOutput", label)} ${formatStatus(theme, status as "applied" | "failed")}`;
+        }),
+      ].join("\n"),
+    );
+  }
+  return sections.join("\n\n");
+}
+
+function renderApplyPatchResult(
+  result: any,
+  options: { expanded: boolean; isPartial?: boolean },
+  theme: any,
+  context: any,
+) {
+  const summary = result.details as ApplyPatchSummary | undefined;
+  if (!summary) return new Text("", 0, 0);
+  const preview = parsePatchPreview(context?.args?.input);
+
+  if (context?.state) {
+    const signature = JSON.stringify({
+      preview,
+      changes: summary.changes,
+      failures: summary.failures,
+      linesAdded: summary.linesAdded,
+      linesRemoved: summary.linesRemoved,
+      status: summary.status,
+      updated: summary.updated.length,
+      moved: summary.moved.length,
+    });
+    if (context.state.latestSummarySignature !== signature) {
+      context.state.latestSummary = summary;
+      context.state.latestSummarySignature = signature;
+      context.invalidate?.();
+    }
+  }
+
+  const body = options.expanded
+    ? renderExpandedResultText(theme, preview, { ...summary }, context?.args?.input)
+    : renderCollapsedResultText(theme, preview, summary);
+  return renderBodyWithFooter(theme, body, options.expanded);
+}
+
+function createInitialSummary(input: string): ApplyPatchSummary {
+  const preview = parsePatchPreview(input);
+  return {
+    status: "partial",
+    added: [],
+    updated: [],
+    deleted: [],
+    moved: [],
+    linesAdded: 0,
+    linesRemoved: 0,
+    changes: [],
+    failures: [],
+    completedOperations: 0,
+    totalOperations: preview.length,
+  };
 }
 
 function formatContent(summary: ApplyPatchSummary): string {
@@ -242,14 +529,18 @@ export default function codexCompatApplyPatchExtension(pi: ExtensionAPI) {
       "Put the full patch text in the input field.",
     ],
     parameters: APPLY_PATCH_PARAMS,
-    renderCall(args, theme) {
-      return renderApplyPatchCall(args, theme);
+    renderCall(args, theme, context) {
+      return renderApplyPatchCall(args, theme, context);
     },
-    renderResult(result, options, theme) {
-      return renderApplyPatchResult(result, options, theme);
+    renderResult(result, options, theme, context) {
+      return renderApplyPatchResult(result, options, theme, context);
     },
     async execute(_toolCallId, params, _signal, onUpdate, ctx) {
       const input = validatePatchInput(params.input);
+      await onUpdate?.({
+        content: [{ type: "text", text: "Applying patch..." }],
+        details: createInitialSummary(input),
+      });
       const summary = await applyPatch(ctx.cwd, input, async (progress) => {
         await onUpdate?.({
           content: [

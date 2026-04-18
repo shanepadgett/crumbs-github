@@ -17,6 +17,7 @@ import {
 import { resolveExistingPath, resolveMutationPath } from "./path-policy.js";
 
 export interface ApplyPatchChange {
+  sectionIndex: number;
   kind: "add" | "update" | "delete";
   path: string;
   move?: { from: string; to: string };
@@ -308,6 +309,7 @@ export async function applyPatch(
           summary.added.push(added);
           summary.linesAdded += operation.linesAdded;
           summary.changes.push({
+            sectionIndex,
             kind: "add",
             path: added,
             linesAdded: operation.linesAdded,
@@ -318,6 +320,7 @@ export async function applyPatch(
           summary.deleted.push(result.deleted);
           summary.linesRemoved += result.linesRemoved;
           summary.changes.push({
+            sectionIndex,
             kind: "delete",
             path: result.deleted,
             linesAdded: 0,
@@ -330,6 +333,7 @@ export async function applyPatch(
           summary.linesAdded += operation.linesAdded;
           summary.linesRemoved += operation.linesRemoved;
           summary.changes.push({
+            sectionIndex,
             kind: "update",
             path: result.moved?.to ?? result.updated,
             move: result.moved,
