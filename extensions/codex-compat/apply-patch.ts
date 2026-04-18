@@ -1,8 +1,11 @@
 import type { Model } from "@mariozechner/pi-ai";
-import { keyHint, type ExtensionAPI } from "@mariozechner/pi-coding-agent";
+import { type ExtensionAPI } from "@mariozechner/pi-coding-agent";
 import { Text } from "@mariozechner/pi-tui";
 import { Type } from "@sinclair/typebox";
-import { truncateMultilineText } from "../shared/ui/collapsible-text-result.js";
+import {
+  renderCollapsibleStyledTextResult,
+  truncateMultilineText,
+} from "../shared/ui/collapsible-text-result.js";
 import { applyPatch, type ApplyPatchSummary } from "./src/patch-executor.js";
 import { getCodexCompatCapabilities } from "./src/capabilities.js";
 
@@ -181,20 +184,18 @@ function renderApplyPatchCall(args: any, theme: any, context: any) {
   const preview = parsePatchPreview(args?.input);
   const summary = context?.state?.latestSummary as ApplyPatchSummary | undefined;
   const label = formatHeaderStats(summary, preview);
-  const lines = [
-    `${theme.fg("toolTitle", theme.bold("apply_patch"))} ${theme.fg("accent", label)}`,
-  ];
+  const header = `${theme.fg("toolTitle", theme.bold("apply_patch"))} ${theme.fg("accent", label)}`;
+  if (context?.executionStarted) return new Text(header, 0, 0);
 
-  if (context?.expanded && !context?.executionStarted) {
-    const rawPatch =
-      typeof args?.input === "string" ? args.input.replace(/\r\n/g, "\n").trim() : "";
-    if (rawPatch) lines.push(theme.fg("toolOutput", rawPatch));
-  } else if (!context?.executionStarted) {
-    const previewText = buildCollapsedPreview(preview, summary);
-    if (previewText) lines.push(theme.fg("toolOutput", previewText));
-  }
-
-  return new Text(lines.join("\n"), 0, 0);
+  const rawPatch = typeof args?.input === "string" ? args.input.replace(/\r\n/g, "\n").trim() : "";
+  const collapsedText = buildCollapsedPreview(theme, preview, summary);
+  const body = collapsedText ? `${header}\n${collapsedText}` : header;
+  const expandedBody = rawPatch ? `${header}\n${theme.fg("muted", rawPatch)}` : undefined;
+  return renderCollapsibleStyledTextResult(theme, {
+    expanded: Boolean(context?.expanded),
+    collapsedText: body,
+    expandedText: expandedBody,
+  });
 }
 
 function renderChangeLine(change: ApplyPatchSummary["changes"][number]): string {
@@ -264,6 +265,7 @@ function buildPreviewRows(
 }
 
 function buildCollapsedPreview(
+  theme: any,
   preview: PatchPreviewOperation[],
   summary: ApplyPatchSummary | undefined,
 ): string {
@@ -273,8 +275,12 @@ function buildCollapsedPreview(
   const maxLines = 3;
   const visible = lines.slice(-maxLines).map((line) => truncateMultilineText(line, 1, 120));
   const hidden = lines.length - visible.length;
-  if (hidden > 0) visible.push(`... +${hidden} more`);
-  return visible.join("\n");
+  const rendered = visible.map((line) => {
+    const [label, status] = line.split(" · ");
+    return `${theme.fg("muted", `${label} `)}${formatStatus(theme, status as "pending" | "applied" | "failed")}`;
+  });
+  if (hidden > 0) rendered.push(theme.fg("muted", `... +${hidden} more`));
+  return rendered.join("\n");
 }
 
 function buildExpandedResult(preview: PatchPreviewOperation[], summary: ApplyPatchSummary): string {
@@ -320,29 +326,20 @@ function formatStatus(theme: any, status: "pending" | "applied" | "failed"): str
   return theme.fg("muted", "pending");
 }
 
-function renderBodyWithFooter(theme: any, body: string, expanded: boolean): Text {
-  const hint = theme.fg(
-    "muted",
-    keyHint("app.tools.expand", expanded ? "to collapse" : "to expand"),
-  );
-  const content = body ? `${body}\n${hint}` : hint;
-  return new Text(content, 0, 0);
-}
-
 function renderCollapsedResultText(
   theme: any,
   preview: PatchPreviewOperation[],
   summary: ApplyPatchSummary,
 ): string {
   const lines = buildPreviewRows(preview, summary);
-  if (lines.length === 0) return theme.fg("toolOutput", buildCollapsedActivity(summary));
+  if (lines.length === 0) return theme.fg("muted", buildCollapsedActivity(summary));
 
   const maxLines = 3;
   const visible = lines.slice(-maxLines).map((line) => truncateMultilineText(line, 1, 120));
   const hidden = lines.length - visible.length;
   const rendered = visible.map((line) => {
     const [label, status] = line.split(" · ");
-    return `${theme.fg("toolOutput", label)} ${formatStatus(theme, status as "pending" | "applied" | "failed")}`;
+    return `${theme.fg("muted", `${label} `)}${formatStatus(theme, status as "pending" | "applied" | "failed")}`;
   });
   if (hidden > 0) rendered.push(theme.fg("muted", `... +${hidden} more`));
   return rendered.join("\n");
@@ -357,7 +354,7 @@ function renderExpandedResultText(
   const settled = buildExpandedResult(preview, summary);
   const sections: string[] = [];
   const patchText = buildExpandedPatchText(summary, input);
-  if (patchText) sections.push(theme.fg("toolOutput", patchText));
+  if (patchText) sections.push(theme.fg("muted", patchText));
   if (settled) {
     const lines = settled.split("\n") as string[];
     const [title, ...rest] = lines;
@@ -366,7 +363,7 @@ function renderExpandedResultText(
         theme.fg("muted", title),
         ...rest.map((line: string) => {
           const [label, status] = line.split("\t");
-          return `${theme.fg("toolOutput", label)} ${formatStatus(theme, status as "applied" | "failed")}`;
+          return `${theme.fg("muted", `${label} `)}${formatStatus(theme, status as "applied" | "failed")}`;
         }),
       ].join("\n"),
     );
@@ -402,10 +399,18 @@ function renderApplyPatchResult(
     }
   }
 
-  const body = options.expanded
-    ? renderExpandedResultText(theme, preview, { ...summary }, context?.args?.input)
-    : renderCollapsedResultText(theme, preview, summary);
-  return renderBodyWithFooter(theme, body, options.expanded);
+  const collapsedText = renderCollapsedResultText(theme, preview, summary);
+  const expandedText = renderExpandedResultText(
+    theme,
+    preview,
+    { ...summary },
+    context?.args?.input,
+  );
+  return renderCollapsibleStyledTextResult(theme, {
+    expanded: options.expanded,
+    collapsedText,
+    expandedText,
+  });
 }
 
 function createInitialSummary(input: string): ApplyPatchSummary {
