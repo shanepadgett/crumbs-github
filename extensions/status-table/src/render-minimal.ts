@@ -7,8 +7,7 @@ import type { StatusBlockId, StatusSnapshot } from "./types.js";
 type BlockDefinition = {
   id: StatusBlockId;
   placement: "left" | "right";
-  renderText: (theme: Theme, snapshot: StatusSnapshot) => string | null;
-  plainText: (snapshot: StatusSnapshot) => string | null;
+  build: (theme: Theme, snapshot: StatusSnapshot) => { rendered: string; plain: string } | null;
 };
 
 function enhancementIcon(enhancement: StatusSnapshot["cavemanEnhancements"][number]): string {
@@ -38,6 +37,19 @@ function abbreviateThinking(value: string): string {
   return value;
 }
 
+function buildModelSuffix(snapshot: StatusSnapshot): string {
+  const parts = [abbreviateThinking(snapshot.thinking)];
+  if (snapshot.fast === "on") parts.push("⚡");
+  return parts.join(", ");
+}
+
+function buildTextPair(
+  rendered: string,
+  plain: string = rendered,
+): { rendered: string; plain: string } {
+  return { rendered, plain };
+}
+
 function dim(theme: Theme, value: string): string {
   return theme.fg("dim", value);
 }
@@ -54,80 +66,74 @@ const BLOCK_DEFINITIONS: readonly BlockDefinition[] = [
   {
     id: "path",
     placement: "left",
-    renderText: (_theme, snapshot) => compactMinimalPath(snapshot.path),
-    plainText: (snapshot) => compactMinimalPath(snapshot.path),
+    build: (_theme, snapshot) => {
+      const value = compactMinimalPath(snapshot.path);
+      return buildTextPair(value);
+    },
   },
   {
     id: "git",
     placement: "left",
-    renderText: (_theme, snapshot) => `${snapshot.branch} (${snapshot.git})`,
-    plainText: (snapshot) => `${snapshot.branch} (${snapshot.git})`,
+    build: (_theme, snapshot) => {
+      const value = `${snapshot.branch} (${snapshot.git})`;
+      return buildTextPair(value);
+    },
   },
   {
     id: "provider",
     placement: "left",
-    renderText: (_theme, snapshot) => snapshot.provider,
-    plainText: (snapshot) => snapshot.provider,
+    build: (_theme, snapshot) => buildTextPair(snapshot.provider),
   },
   {
     id: "model",
     placement: "left",
-    renderText: (_theme, snapshot) => snapshot.model,
-    plainText: (snapshot) => snapshot.model,
-  },
-  {
-    id: "thinking",
-    placement: "left",
-    renderText: (_theme, snapshot) => abbreviateThinking(snapshot.thinking),
-    plainText: (snapshot) => abbreviateThinking(snapshot.thinking),
+    build: (_theme, snapshot) => {
+      const suffix = buildModelSuffix(snapshot);
+      if (!suffix) return buildTextPair(snapshot.model);
+      return buildTextPair(`${snapshot.model} (${suffix})`, `${snapshot.model} (${suffix})`);
+    },
   },
   {
     id: "focus",
     placement: "right",
-    renderText: (theme, snapshot) =>
-      snapshot.focusMode !== "off" ? theme.fg("accent", `🎯 ${snapshot.focus}`) : null,
-    plainText: (snapshot) => (snapshot.focusMode !== "off" ? `🎯 ${snapshot.focus}` : null),
-  },
-  {
-    id: "fast",
-    placement: "right",
-    renderText: (theme, snapshot) => (snapshot.fast === "on" ? theme.fg("accent", "⚡") : null),
-    plainText: (snapshot) => (snapshot.fast === "on" ? "⚡" : null),
+    build: (theme, snapshot) =>
+      snapshot.focusMode !== "off"
+        ? buildTextPair(theme.fg("accent", `🎯 ${snapshot.focus}`), `🎯 ${snapshot.focus}`)
+        : null,
   },
   {
     id: "caveman",
     placement: "right",
-    renderText: (theme, snapshot) => {
+    build: (theme, snapshot) => {
       if (!snapshot.cavemanEnabled) return null;
 
-      const segments = [theme.fg("accent", `🗿(${snapshot.cavemanName})`)];
+      const renderedSegments = [theme.fg("accent", `🗿(${snapshot.cavemanName})`)];
+      const plainSegments = [`🗿(${snapshot.cavemanName})`];
       for (const enhancement of snapshot.cavemanEnhancements) {
-        segments.push(theme.fg("accent", enhancementIcon(enhancement)));
+        const icon = enhancementIcon(enhancement);
+        renderedSegments.push(theme.fg("accent", icon));
+        plainSegments.push(icon);
       }
-      return segments.join(theme.fg("dim", " · "));
-    },
-    plainText: (snapshot) => {
-      if (!snapshot.cavemanEnabled) return null;
-
-      const segments = [`🗿(${snapshot.cavemanName})`];
-      for (const enhancement of snapshot.cavemanEnhancements) {
-        segments.push(enhancementIcon(enhancement));
-      }
-      return segments.join(" · ");
+      return buildTextPair(
+        renderedSegments.join(theme.fg("dim", " · ")),
+        plainSegments.join(" · "),
+      );
     },
   },
   {
     id: "context",
     placement: "right",
-    renderText: (theme, snapshot) =>
-      renderContextValue(theme, snapshot.contextSummary, snapshot.contextPercent),
-    plainText: (snapshot) => snapshot.contextSummary,
+    build: (theme, snapshot) =>
+      buildTextPair(
+        renderContextValue(theme, snapshot.contextSummary, snapshot.contextPercent),
+        snapshot.contextSummary,
+      ),
   },
   {
     id: "tokens",
     placement: "right",
-    renderText: (theme, snapshot) => dim(theme, snapshot.tokenSummary),
-    plainText: (snapshot) => snapshot.tokenSummary,
+    build: (theme, snapshot) =>
+      buildTextPair(dim(theme, snapshot.tokenSummary), snapshot.tokenSummary),
   },
 ] as const;
 
@@ -189,18 +195,16 @@ export function renderMinimalTable(
   for (const blockId of visibleBlocks) {
     const block = getBlockDefinition(blockId);
     if (!block) continue;
+    const text = block.build(theme, snapshot);
+    if (!text) continue;
 
     if (block.placement === "left") {
-      const text = block.plainText(snapshot);
-      if (text) leftSegments.push(text);
+      leftSegments.push(text.plain);
       continue;
     }
 
-    const rendered = block.renderText(theme, snapshot);
-    const plain = block.plainText(snapshot);
-    if (!rendered || !plain) continue;
-    rightTextSegments.push(rendered);
-    rightPlainSegments.push(plain);
+    rightTextSegments.push(text.rendered);
+    rightPlainSegments.push(text.plain);
   }
 
   const rightText = joinSegments(theme, rightTextSegments);

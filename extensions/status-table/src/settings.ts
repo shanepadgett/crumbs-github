@@ -15,18 +15,7 @@ import type { StatusBlockId, StatusFlags, StatusTablePrefs } from "./types.js";
 
 const DEFAULT_PREFS: StatusTablePrefs = {
   enabled: true,
-  visibleBlocks: [
-    "path",
-    "git",
-    "provider",
-    "model",
-    "thinking",
-    "focus",
-    "fast",
-    "caveman",
-    "context",
-    "tokens",
-  ],
+  visibleBlocks: ["path", "git", "provider", "model", "focus", "caveman", "context", "tokens"],
 };
 
 const STATUS_TABLE_EXTENSION_KEY = "statusTable";

@@ -12,9 +12,7 @@ export type StatusBlockId =
   | "git"
   | "provider"
   | "model"
-  | "thinking"
   | "focus"
-  | "fast"
   | "caveman"
   | "context"
   | "tokens";

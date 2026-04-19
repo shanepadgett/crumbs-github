@@ -8,9 +8,7 @@ It shows:
 - current branch
 - current path
 - model provider
-- model id
-- thinking level
-- Codex fast mode
+- model id with thinking level and Codex fast mode
 - caveman on/off state and active powers
 - context usage as `used / total`
 
@@ -49,9 +47,7 @@ If you change files under `extensions/status-table/`, reload Pi before testing.
         "git",
         "provider",
         "model",
-        "thinking",
         "focus",
-        "fast",
         "caveman",
         "context",
         "tokens"
