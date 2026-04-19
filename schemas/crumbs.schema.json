@@ -324,11 +324,20 @@
           "default": false,
           "description": "Enable Caveman system prompt mode by default."
         },
+        "enhancements": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": ["improve", "design"]
+          },
+          "uniqueItems": true,
+          "default": [],
+          "description": "Optional Caveman prompt enhancements. improve adds Pi self-improvement guidance. design adds UX and interface-shaping guidance."
+        },
         "mode": {
           "type": "string",
           "enum": ["minimal", "improve"],
-          "default": "minimal",
-          "description": "Caveman prompt mode. minimal=concise style, improve=Pi self-improvement guidance enabled."
+          "description": "Deprecated legacy Caveman mode. Use enhancements instead."
         }
       },
       "additionalProperties": false

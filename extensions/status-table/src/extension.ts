@@ -12,6 +12,7 @@ import { renderMinimalTable } from "./render-minimal.js";
 import { loadStatusFlags, loadStatusTablePrefs, saveStatusTablePrefs } from "./settings.js";
 import { buildSnapshot, getSessionTokenTotals } from "./snapshot.js";
 import type {
+  CavemanEnhancement,
   GitSummary,
   SessionTokenTotals,
   StatusFlags,
@@ -33,7 +34,8 @@ type StatusFlagEvent = {
 };
 
 type CavemanFlagEvent = StatusFlagEvent & {
-  mode?: "minimal" | "improve";
+  name?: string;
+  enhancements?: CavemanEnhancement[];
 };
 
 type FocusFlagEvent = StatusFlagEvent & {
@@ -57,7 +59,12 @@ function asCavemanFlagEvent(value: unknown): CavemanFlagEvent {
   return {
     cwd: typeof record.cwd === "string" ? record.cwd : undefined,
     enabled: typeof record.enabled === "boolean" ? record.enabled : undefined,
-    mode: record.mode === "improve" || record.mode === "minimal" ? record.mode : undefined,
+    name: typeof record.name === "string" ? record.name : undefined,
+    enhancements: Array.isArray(record.enhancements)
+      ? record.enhancements.filter(
+          (value): value is CavemanEnhancement => value === "improve" || value === "design",
+        )
+      : undefined,
   };
 }
 
@@ -90,8 +97,9 @@ function asFocusFlagEvent(value: unknown): FocusFlagEvent {
 const DEFAULT_PREFS: StatusTablePrefs = { enabled: true, mode: "full" };
 const DEFAULT_FLAGS: StatusFlags = {
   fastEnabled: false,
+  cavemanName: "Grug",
   cavemanEnabled: false,
-  cavemanMode: "minimal",
+  cavemanEnhancements: [],
   focusEnabled: false,
   focusMode: "hidden",
 };
@@ -154,9 +162,13 @@ export default function statusTableExtension(pi: ExtensionAPI): void {
   }
 
   async function refreshFlags(cwd: string): Promise<StatusFlags> {
+    const state = getWorkspaceState(cwd);
     const flags = await loadStatusFlags(cwd);
-    getWorkspaceState(cwd).flags = flags;
-    return flags;
+    state.flags = {
+      ...flags,
+      cavemanName: state.flags.cavemanName,
+    };
+    return state.flags;
   }
 
   function refreshTokenTotals(ctx: ExtensionContext): SessionTokenTotals {
@@ -265,13 +277,14 @@ export default function statusTableExtension(pi: ExtensionAPI): void {
   }
 
   function applyCavemanEvent(ctx: ExtensionContext | undefined, event: CavemanFlagEvent): void {
-    if (!ctx) return;
-    if (event.cwd && event.cwd !== ctx.cwd) return;
+    const targetCwd = event.cwd ?? ctx?.cwd;
+    if (!targetCwd) return;
 
-    const flags = getWorkspaceState(ctx.cwd).flags;
+    const flags = getWorkspaceState(targetCwd).flags;
+    if (event.name) flags.cavemanName = event.name;
     if (typeof event.enabled === "boolean") flags.cavemanEnabled = event.enabled;
-    if (event.mode) flags.cavemanMode = event.mode;
-    refreshUI(ctx);
+    if (event.enhancements) flags.cavemanEnhancements = [...event.enhancements];
+    if (ctx && ctx.cwd === targetCwd) refreshUI(ctx);
   }
 
   function applyFocusEvent(ctx: ExtensionContext | undefined, event: FocusFlagEvent): void {

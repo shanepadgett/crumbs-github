@@ -97,9 +97,9 @@ const KNOWN_TYPE_RULES: Array<{
   { keyPath: "extensions.caveman", expected: "object", validate: expectsObject },
   { keyPath: "extensions.caveman.enabled", expected: "boolean", validate: expectsBoolean },
   {
-    keyPath: "extensions.caveman.mode",
-    expected: "minimal|improve",
-    validate: expectsStringEnum(["minimal", "improve"]),
+    keyPath: "extensions.caveman.enhancements",
+    expected: "(improve|design)[]",
+    validate: expectsStringArray,
   },
   {
     keyPath: "extensions.pathVisibility.sessionFocus",

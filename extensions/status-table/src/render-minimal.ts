@@ -32,6 +32,8 @@ function getModeSegments(
 } {
   const rendered: string[] = [];
   const plain: string[] = [];
+  const cavemanRendered: string[] = [];
+  const cavemanPlain: string[] = [];
 
   if (snapshot.focusMode !== "off") {
     rendered.push(theme.fg("accent", `🎯 ${snapshot.focus}`));
@@ -43,14 +45,25 @@ function getModeSegments(
     plain.push("⚡");
   }
 
-  if (snapshot.cavemanMode === "minimal") {
-    rendered.push(theme.fg("accent", "🗿"));
-    plain.push("🗿");
+  if (snapshot.cavemanEnabled) {
+    const cavemanLabel = `🗿(${snapshot.cavemanName})`;
+    cavemanRendered.push(theme.fg("accent", cavemanLabel));
+    cavemanPlain.push(cavemanLabel);
   }
 
-  if (snapshot.cavemanMode === "improve") {
-    rendered.push(theme.fg("accent", "🗿🔨"));
-    plain.push("🗿🔨");
+  if (snapshot.cavemanEnhancements.includes("improve")) {
+    cavemanRendered.push(theme.fg("accent", "🔨"));
+    cavemanPlain.push("🔨");
+  }
+
+  if (snapshot.cavemanEnhancements.includes("design")) {
+    cavemanRendered.push(theme.fg("accent", "🎨"));
+    cavemanPlain.push("🎨");
+  }
+
+  if (cavemanRendered.length > 0) {
+    rendered.push(cavemanRendered.join(theme.fg("dim", " · ")));
+    plain.push(cavemanPlain.join(" · "));
   }
 
   return { rendered, plain };

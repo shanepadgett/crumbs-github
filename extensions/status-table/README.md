@@ -11,7 +11,7 @@ It shows:
 - model id
 - thinking level
 - Codex fast mode
-- caveman mode placeholder/state
+- caveman on/off state and active powers
 - context usage as `used / total`
 
 ## Notes

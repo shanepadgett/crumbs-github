@@ -8,17 +8,22 @@ import type { GitSummary, SessionTokenTotals, StatusFlags, StatusSnapshot } from
 
 function getCavemanDisplay(flags: StatusFlags): {
   label: string;
-  mode: StatusSnapshot["cavemanMode"];
+  enabled: boolean;
+  enhancements: StatusSnapshot["cavemanEnhancements"];
 } {
   if (!flags.cavemanEnabled) {
-    return { label: "off", mode: "off" };
+    return { label: "off", enabled: false, enhancements: [] };
   }
 
-  if (flags.cavemanMode === "improve") {
-    return { label: "Me here · Much improve", mode: "improve" };
-  }
+  const suffix = flags.cavemanEnhancements
+    .map((enhancement) => (enhancement === "improve" ? "🔨" : "🎨"))
+    .join("");
 
-  return { label: "Me here", mode: "minimal" };
+  return {
+    label: suffix ? `${flags.cavemanName} ${suffix}` : flags.cavemanName,
+    enabled: true,
+    enhancements: [...flags.cavemanEnhancements],
+  };
 }
 
 function getFocusDisplay(flags: StatusFlags): {
@@ -182,7 +187,9 @@ export function buildSnapshot(
     thinking: pi.getThinkingLevel(),
     fast: flags.fastEnabled ? "on" : "off",
     caveman: caveman.label,
-    cavemanMode: caveman.mode,
+    cavemanName: flags.cavemanName,
+    cavemanEnabled: caveman.enabled,
+    cavemanEnhancements: caveman.enhancements,
     focus: focus.label,
     focusMode: focus.mode,
     contextSummary,

@@ -1,4 +1,9 @@
 import {
+  CAVEMAN_NAME,
+  normalizeCavemanEnhancements,
+  type CavemanEnhancement,
+} from "../../caveman/src/system-prompt.js";
+import {
   loadEffectiveCrumbsExtensionsConfig,
   updateGlobalCrumbsConfig,
 } from "../../shared/config/crumbs-loader.js";
@@ -19,8 +24,8 @@ function normalizeMode(value: unknown): StatusTableMode {
   return value === "minimal" ? "minimal" : "full";
 }
 
-function normalizeCavemanMode(value: unknown): "minimal" | "improve" {
-  return value === "improve" ? "improve" : "minimal";
+function normalizeLegacyCavemanMode(value: unknown): CavemanEnhancement[] {
+  return value === "improve" ? ["improve"] : [];
 }
 
 function normalizeFocusMode(value: unknown): "soft" | "hidden" | "hard" {
@@ -47,11 +52,16 @@ export async function loadStatusFlags(cwd: string): Promise<StatusFlags> {
   const codexCompatSection = asObject(extensions[CODEX_COMPAT_EXTENSION_KEY]);
   const cavemanSection = asObject(extensions[CAVEMAN_EXTENSION_KEY]);
   const focusSection = asObject(extensions[FOCUS_ADV_EXTENSION_KEY]);
+  const cavemanEnhancements = normalizeCavemanEnhancements(cavemanSection?.enhancements);
 
   return {
     fastEnabled: typeof codexCompatSection?.fast === "boolean" ? codexCompatSection.fast : false,
+    cavemanName: CAVEMAN_NAME,
     cavemanEnabled: readEnabled(cavemanSection),
-    cavemanMode: normalizeCavemanMode(cavemanSection?.mode),
+    cavemanEnhancements:
+      cavemanEnhancements.length > 0
+        ? cavemanEnhancements
+        : normalizeLegacyCavemanMode(cavemanSection?.mode),
     focusEnabled: readEnabled(focusSection),
     focusMode: normalizeFocusMode(focusSection?.mode),
   };

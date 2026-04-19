@@ -58,8 +58,7 @@
             "--app",
             "visual_studio_code"
           ],
-          "lifecycle": "lazy",
-          "enabled": false
+          "lifecycle": "lazy"
         }
       }
     }

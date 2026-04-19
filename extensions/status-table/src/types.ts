@@ -1,4 +1,6 @@
 import type { ThemeColor } from "@mariozechner/pi-coding-agent";
+export type { CavemanEnhancement } from "../../caveman/src/system-prompt.js";
+import type { CavemanEnhancement } from "../../caveman/src/system-prompt.js";
 
 export type GitSummary = {
   branch: string;
@@ -21,7 +23,9 @@ export type StatusSnapshot = {
   thinking: string;
   fast: string;
   caveman: string;
-  cavemanMode: "off" | CavemanMode;
+  cavemanName: string;
+  cavemanEnabled: boolean;
+  cavemanEnhancements: CavemanEnhancement[];
   focus: string;
   focusMode: "off" | FocusMode;
   contextSummary: string;
@@ -34,13 +38,13 @@ export type SessionTokenTotals = {
   output: number;
 };
 
-export type CavemanMode = "minimal" | "improve";
 export type FocusMode = "soft" | "hidden" | "hard";
 
 export type StatusFlags = {
   fastEnabled: boolean;
+  cavemanName: string;
   cavemanEnabled: boolean;
-  cavemanMode: CavemanMode;
+  cavemanEnhancements: CavemanEnhancement[];
   focusEnabled: boolean;
   focusMode: FocusMode;
 };
