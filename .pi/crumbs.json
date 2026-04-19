@@ -3,37 +3,9 @@
   "extensions": {
     "caveman": {
       "enabled": true,
-      "mode": "improve"
-    },
-    "pathVisibility": {
-      "enabled": true,
-      "deny": [
-        ".env",
-        ".env.*",
-        "~/.ssh/**",
-        "~/.aws/**",
-        "~/.gnupg/**",
-        "docs/_hidden/**"
-      ],
-      "injectPromptHint": true,
-      "focus": {
-        "enabled": false,
-        "mode": "hard",
-        "roots": [],
-        "alwaysAllow": [
-          ".pi/crumbs.json",
-          "schemas/crumbs.schema.json",
-          "AGENTS.md",
-          "package.json",
-          "mise.toml",
-          "README.md",
-          "docs/",
-          "node_modules/@mariozechner/pi-coding-agent",
-          "node_modules/@mariozechner/pi-ai",
-          "node_modules/@mariozechner/pi-tui",
-          "node_modules/@mariozechner/pi-agent-core"
-        ]
-      }
+      "powers": [
+        "improve"
+      ]
     },
     "quietMarkdownlint": {
       "excludeGlobs": [

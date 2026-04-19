@@ -52,7 +52,9 @@ export async function loadStatusFlags(cwd: string): Promise<StatusFlags> {
   const codexCompatSection = asObject(extensions[CODEX_COMPAT_EXTENSION_KEY]);
   const cavemanSection = asObject(extensions[CAVEMAN_EXTENSION_KEY]);
   const focusSection = asObject(extensions[FOCUS_ADV_EXTENSION_KEY]);
-  const cavemanEnhancements = normalizeCavemanEnhancements(cavemanSection?.enhancements);
+  const cavemanEnhancements = normalizeCavemanEnhancements(
+    cavemanSection?.powers ?? cavemanSection?.enhancements,
+  );
 
   return {
     fastEnabled: typeof codexCompatSection?.fast === "boolean" ? codexCompatSection.fast : false,

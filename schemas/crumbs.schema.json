@@ -324,6 +324,16 @@
           "default": false,
           "description": "Enable Caveman system prompt mode by default."
         },
+        "powers": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": ["improve", "design"]
+          },
+          "uniqueItems": true,
+          "default": [],
+          "description": "Optional Caveman powers. improve adds Pi self-improvement guidance. design adds UX and interface-shaping guidance."
+        },
         "enhancements": {
           "type": "array",
           "items": {
@@ -332,12 +342,7 @@
           },
           "uniqueItems": true,
           "default": [],
-          "description": "Optional Caveman prompt enhancements. improve adds Pi self-improvement guidance. design adds UX and interface-shaping guidance."
-        },
-        "mode": {
-          "type": "string",
-          "enum": ["minimal", "improve"],
-          "description": "Deprecated legacy Caveman mode. Use enhancements instead."
+          "description": "Deprecated legacy alias for powers. Use powers instead."
         }
       },
       "additionalProperties": false

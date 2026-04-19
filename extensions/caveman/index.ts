@@ -4,12 +4,12 @@
  * What it does:
  * - Adds `/caveman` to toggle a caveman system prompt on/off.
  * - Replaces the full system prompt per turn when enabled.
- * - Adds optional enhancements that layer extra guidance onto base caveman behavior.
+ * - Adds optional powers that layer extra guidance onto base caveman behavior.
  *
  * How to use it:
  * - Persist defaults in crumbs config: `extensions.caveman` in `.pi/crumbs.json`.
  * - Run `/caveman on` to enable caveman mode.
- * - Run `/caveman powers` to toggle optional enhancements.
+ * - Run `/caveman powers` to toggle optional powers.
  * - Run `/caveman off` to restore normal prompt behavior.
  */
 
@@ -69,7 +69,7 @@ function parseState(section: JsonObject | null): CavemanState {
   if (!section) return { ...DEFAULT_STATE };
 
   const enabled = typeof section.enabled === "boolean" ? section.enabled : DEFAULT_STATE.enabled;
-  const enhancements = normalizeCavemanEnhancements(section.enhancements);
+  const enhancements = normalizeCavemanEnhancements(section.powers ?? section.enhancements);
   if (enhancements.length > 0) return { enabled, enhancements };
 
   if (section.mode === "improve") {
@@ -86,11 +86,12 @@ async function saveState(state: CavemanState): Promise<void> {
     const caveman = { ...asObject(extensions.caveman) };
 
     delete caveman.mode;
+    delete caveman.enhancements;
 
     extensions.caveman = {
       ...caveman,
       enabled: state.enabled,
-      enhancements: [...state.enhancements],
+      powers: [...state.enhancements],
     };
 
     next.extensions = extensions;
