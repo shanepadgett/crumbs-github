@@ -99,12 +99,7 @@ function getToolCachePath(): string {
 }
 
 function getToolCacheKey(record: ServerConfigRecord): string {
-  return JSON.stringify([
-    record.filePath,
-    record.sourceKind,
-    record.name,
-    record.config,
-  ]);
+  return JSON.stringify([record.filePath, record.sourceKind, record.name, record.config]);
 }
 
 function readToolCacheFile(): McpToolCacheFile {
@@ -278,7 +273,7 @@ export function readCachedServerTools(record: ServerConfigRecord): McpTool[] | u
 export function writeCachedServerTools(record: ServerConfigRecord, tools: McpTool[]): void {
   const cache = readToolCacheFile();
   const nextServers = {
-    ...(cache.servers ?? {}),
+    ...cache.servers,
     [getToolCacheKey(record)]: cloneTools(tools),
   };
 

@@ -1,6 +1,7 @@
 import {
   createAgentSession,
   DefaultResourceLoader,
+  getAgentDir,
   SessionManager,
   type AgentSession,
 } from "@mariozechner/pi-coding-agent";
@@ -197,6 +198,7 @@ async function runAgent(options: RunAgentOptions): Promise<RunResult> {
   const events: ToolActivity[] = [];
   const loader = new DefaultResourceLoader({
     cwd,
+    agentDir: getAgentDir(),
     appendSystemPromptOverride: (base) =>
       options.agent.promptText.trim() ? [...base, options.agent.promptText] : base,
     extensionsOverride: (base) => ({
