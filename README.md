@@ -60,6 +60,23 @@ pi remove .
 pi remove -l .
 ```
 
+## Testing
+
+Tests use Bun from root project tooling.
+
+```bash
+mise run test
+```
+
+Place unit tests beside source as `*.test.ts`. Scope tests by path when focused feedback is enough.
+
+```bash
+bun test extensions/<extension-name>
+bun test extensions/<extension-name>/src/example.test.ts
+```
+
+Use root test tooling rather than per-extension test frameworks unless extension has distinct runtime needs.
+
 ## Crumbs settings reload behavior
 
 Crumbs settings are cached after Pi loads extensions.

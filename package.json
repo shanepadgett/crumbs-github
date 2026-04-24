@@ -15,7 +15,9 @@
     "extensions/web"
   ],
   "type": "module",
-  "scripts": {},
+  "scripts": {
+    "test": "bun test"
+  },
   "dependencies": {
     "@modelcontextprotocol/sdk": "1.29.0",
     "node-pty": "1.1.0"
