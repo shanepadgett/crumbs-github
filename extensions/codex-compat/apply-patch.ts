@@ -182,13 +182,13 @@ function formatHeaderStats(
 
 function renderApplyPatchCall(args: any, theme: any, context: any) {
   const preview = parsePatchPreview(args?.input);
-  const summary = context?.state?.latestSummary as ApplyPatchSummary | undefined;
-  const label = formatHeaderStats(summary, preview);
+  const label = formatHeaderStats(undefined, preview);
   const header = `${theme.fg("toolTitle", theme.bold("apply_patch"))} ${theme.fg("accent", label)}`;
-  if (context?.executionStarted) return new Text(header, 0, 0);
+
+  if (context?.executionStarted || !context?.isPartial) return new Text(header, 0, 0);
 
   const rawPatch = typeof args?.input === "string" ? args.input.replace(/\r\n/g, "\n").trim() : "";
-  const collapsedText = buildCollapsedPreview(theme, preview, summary);
+  const collapsedText = renderCollapsedPreviewText(theme, preview);
   const body = collapsedText ? `${header}\n${collapsedText}` : header;
   const expandedBody = rawPatch ? `${header}\n${theme.fg("muted", rawPatch)}` : undefined;
   return renderCollapsibleStyledTextResult(theme, {
@@ -264,12 +264,8 @@ function buildPreviewRows(
   });
 }
 
-function buildCollapsedPreview(
-  theme: any,
-  preview: PatchPreviewOperation[],
-  summary: ApplyPatchSummary | undefined,
-): string {
-  const lines = buildPreviewRows(preview, summary);
+function renderCollapsedPreviewText(theme: any, preview: PatchPreviewOperation[]): string {
+  const lines = buildPreviewRows(preview, undefined);
   if (lines.length === 0) return "";
 
   const maxLines = 3;
@@ -277,7 +273,7 @@ function buildCollapsedPreview(
   const hidden = lines.length - visible.length;
   const rendered = visible.map((line) => {
     const [label, status] = line.split(" · ");
-    return `${theme.fg("muted", `${label} `)}${formatStatus(theme, status as "pending" | "applied" | "failed")}`;
+    return `${theme.fg("muted", `${label} `)}${formatStatus(theme, status as "pending")}`;
   });
   if (hidden > 0) rendered.push(theme.fg("muted", `... +${hidden} more`));
   return rendered.join("\n");
@@ -380,24 +376,6 @@ function renderApplyPatchResult(
   const summary = result.details as ApplyPatchSummary | undefined;
   if (!summary) return new Text("", 0, 0);
   const preview = parsePatchPreview(context?.args?.input);
-
-  if (context?.state) {
-    const signature = JSON.stringify({
-      preview,
-      changes: summary.changes,
-      failures: summary.failures,
-      linesAdded: summary.linesAdded,
-      linesRemoved: summary.linesRemoved,
-      status: summary.status,
-      updated: summary.updated.length,
-      moved: summary.moved.length,
-    });
-    if (context.state.latestSummarySignature !== signature) {
-      context.state.latestSummary = summary;
-      context.state.latestSummarySignature = signature;
-      context.invalidate?.();
-    }
-  }
 
   const collapsedText = renderCollapsedResultText(theme, preview, summary);
   const expandedText = renderExpandedResultText(
