@@ -43,6 +43,7 @@ register("openai", [
   "gpt-5.1-codex-mini",
   "gpt-5.2-codex",
   "gpt-5.3-codex",
+  "gpt-5.5",
   "o4-mini",
 ]);
 register("openai", ["gpt-5.3-codex-spark"], false);
@@ -55,6 +56,7 @@ register("azure-openai-responses", [
   "gpt-5.1-codex-mini",
   "gpt-5.2-codex",
   "gpt-5.3-codex",
+  "gpt-5.5",
   "o4-mini",
 ]);
 register("azure-openai-responses", ["gpt-5.3-codex-spark"], false);
@@ -65,6 +67,7 @@ register("github-copilot", [
   "gpt-5.1-codex-mini",
   "gpt-5.2-codex",
   "gpt-5.3-codex",
+  "gpt-5.5",
 ]);
 
 register("openai-codex", [
@@ -76,6 +79,7 @@ register("openai-codex", [
   "gpt-5.3-codex",
   "gpt-5.4",
   "gpt-5.4-mini",
+  "gpt-5.5",
 ]);
 register("openai-codex", ["gpt-5.3-codex-spark"], false);
 
@@ -86,6 +90,7 @@ register("opencode", [
   "gpt-5.1-codex-mini",
   "gpt-5.2-codex",
   "gpt-5.3-codex",
+  "gpt-5.5",
 ]);
 
 register("openrouter", [
@@ -95,6 +100,7 @@ register("openrouter", [
   "openai/gpt-5.1-codex-mini",
   "openai/gpt-5.2-codex",
   "openai/gpt-5.3-codex",
+  "openai/gpt-5.5",
 ]);
 
 register("vercel-ai-gateway", [
@@ -104,6 +110,7 @@ register("vercel-ai-gateway", [
   "openai/gpt-5.1-codex-mini",
   "openai/gpt-5.2-codex",
   "openai/gpt-5.3-codex",
+  "openai/gpt-5.5",
 ]);
 
 export function getCodexCompatCapabilities(
