@@ -16,7 +16,7 @@ const KEPT_BUILTINS = ["read", "bash"] as const;
 const APPLY_PATCH_PARAMS = Type.Object({
   input: Type.String({
     description:
-      "Patch body or explicit apply_patch invocation. Patch bodies use *** Begin Patch / *** End Patch with Add/Update/Delete File sections, optional *** Move to, and optional *** End of File in update chunks.",
+      "Patch body or explicit apply_patch invocation. Use one coherent patch for all file changes in the task. Sections: Add File for new files, Replace File for full rewrites of existing files, Update File for contextual edits, Delete File for removals. Use *** Move to inside Update File for moves; move targets must not already exist. Do not include more than one Add/Replace/Update/Delete section for the same path.",
   }),
 });
 
@@ -29,7 +29,7 @@ interface ToolInfo {
 
 interface PatchPreviewOperation {
   sectionIndex: number;
-  kind: "add" | "update" | "delete";
+  kind: "add" | "replace" | "update" | "delete";
   path: string;
   moveTo?: string;
   linesAdded: number;
@@ -49,12 +49,33 @@ function buildCompatPromptDelta(): string {
     "- Only skip apply_patch in very rare cases where a deterministic scripted transformation via tools like python3 or node materially reduces token usage or risk.",
     "- Never use cat, echo, printf, here-docs, perl, sed, or similar shell/file-manipulation shortcuts to write or rewrite files when apply_patch can express change.",
     "- For apply_patch, send either a raw patch body or an explicit apply_patch/applypatch invocation.",
-    "- Patch grammar: *** Begin Patch / *** End Patch with Add/Update/Delete File sections, optional *** Move to, optional *** End of File for EOF-sensitive update chunks.",
-    "- For Add File sections, only lines prefixed with + are file content.",
-    "- Prefer one coherent apply_patch call when related edits belong together.",
+    "- Patch grammar: *** Begin Patch / *** End Patch with Add/Replace/Update/Delete File sections, optional *** Move to, optional *** End of File for EOF-sensitive update chunks.",
+    "- Prefer one coherent apply_patch call for all file changes in a task, across all affected files. Include adds, replaces, updates, deletes, and moves together when possible.",
+    "- Use Add File for new files, Replace File for full rewrites of existing files, Update File for contextual edits, and Delete File only for removals.",
+    "- Use one Update File section with *** Move to for combined move+edit operations. Move targets must not already exist.",
+    "- Do not include more than one Add/Replace/Update/Delete section for the same path in one patch. Use Replace File for full rewrites.",
+    "- For Add File and Replace File sections, only lines prefixed with + are file content.",
     '- Use view_image for local image inspection; pass detail: "original" only when the current model supports it.',
   ].join("\n");
 }
+
+const APPLY_PATCH_EXAMPLE = [
+  "Example:",
+  "*** Begin Patch",
+  "*** Add File: new.md",
+  "+new file content",
+  "*** Replace File: existing.md",
+  "+full replacement content",
+  "*** Update File: edited.md",
+  "-old line",
+  "+new line",
+  "*** Update File: old-name.md",
+  "*** Move to: new-name.md",
+  "-old content",
+  "+new content",
+  "*** Delete File: remove.md",
+  "*** End Patch",
+].join("\n");
 
 function buildCompatToolSet(
   currentActiveTools: string[],
@@ -90,11 +111,18 @@ function parsePatchPreview(input: string | undefined): PatchPreviewOperation[] {
   let current: PatchPreviewOperation | undefined;
 
   for (const line of lines) {
-    const section = line.match(/^\*\*\* (Add|Update|Delete) File: (.+)$/);
+    const section = line.match(/^\*\*\* (Add|Replace|Update|Delete) File: (.+)$/);
     if (section) {
       current = {
         sectionIndex: operations.length + 1,
-        kind: section[1] === "Add" ? "add" : section[1] === "Delete" ? "delete" : "update",
+        kind:
+          section[1] === "Add"
+            ? "add"
+            : section[1] === "Replace"
+              ? "replace"
+              : section[1] === "Delete"
+                ? "delete"
+                : "update",
         path: section[2],
         linesAdded: 0,
         linesRemoved: 0,
@@ -111,7 +139,7 @@ function parsePatchPreview(input: string | undefined): PatchPreviewOperation[] {
       continue;
     }
 
-    if (current.kind === "add") {
+    if (current.kind === "add" || current.kind === "replace") {
       if (line.startsWith("+")) current.linesAdded += 1;
       continue;
     }
@@ -201,6 +229,7 @@ function renderApplyPatchCall(args: any, theme: any, context: any) {
 function renderChangeLine(change: ApplyPatchSummary["changes"][number]): string {
   if (change.move) return `Moving ${change.move.from} -> ${change.move.to}`;
   if (change.kind === "add") return `Adding ${change.path}`;
+  if (change.kind === "replace") return `Replacing ${change.path}`;
   if (change.kind === "delete") return `Deleting ${change.path}`;
   return `Editing ${change.path}`;
 }
@@ -219,6 +248,7 @@ function renderFailureLine(failure: ApplyPatchSummary["failures"][number]): stri
 
 function formatPreviewOperation(operation: PatchPreviewOperation): string {
   if (operation.kind === "add") return `Adding ${operation.path}`;
+  if (operation.kind === "replace") return `Replacing ${operation.path}`;
   if (operation.kind === "delete") return `Deleting ${operation.path}`;
   if (operation.moveTo) return `Moving ${operation.path} -> ${operation.moveTo}`;
   return `Editing ${operation.path}`;
@@ -226,6 +256,7 @@ function formatPreviewOperation(operation: PatchPreviewOperation): string {
 
 function formatSettledOperation(operation: PatchPreviewOperation): string {
   if (operation.kind === "add") return `Added ${operation.path}`;
+  if (operation.kind === "replace") return `Replaced ${operation.path}`;
   if (operation.kind === "delete") return `Deleted ${operation.path}`;
   if (operation.moveTo) return `Moved ${operation.path} -> ${operation.moveTo}`;
   return `Edited ${operation.path}`;
@@ -509,10 +540,14 @@ export default function codexCompatApplyPatchExtension(pi: ExtensionAPI) {
       "Use apply_patch for file edits, file creation, file deletion, moves, and coordinated multi-file changes. Treat this as required unless a rare deterministic scripted transform is clearly better.",
       "Do not use cat, echo, printf, here-docs, perl, sed, or similar shell shortcuts to create or modify files when apply_patch can express change.",
       "Only bypass apply_patch for unusual deterministic file rewrites via tools like python3 or node when that materially reduces tokens or patch risk.",
-      "Patch bodies use *** Begin Patch / *** End Patch and Add/Update/Delete File sections.",
-      "In Add File sections, only + lines are treated as content.",
+      "Patch bodies use *** Begin Patch / *** End Patch and Add/Replace/Update/Delete File sections.",
+      "Prefer one coherent apply_patch call for all file changes in a task, across all affected files. Include adds, replaces, updates, deletes, and moves together when possible.",
+      "Use Add File for new files, Replace File for full rewrites of existing files, Update File for contextual edits, and Delete File only for removals.",
+      "Use one Update File section with *** Move to for combined move+edit operations. Move targets must not already exist.",
+      "Do not include more than one Add/Replace/Update/Delete section for the same path in one patch. Use Replace File for full rewrites.",
+      "In Add File and Replace File sections, only + lines are treated as content.",
       "Use *** End of File in update chunks when the match should be EOF-sensitive.",
-      "When one task needs coordinated edits across multiple files, send them in a single apply_patch call when one coherent patch will do.",
+      APPLY_PATCH_EXAMPLE,
       "Put the full patch text in the input field.",
     ],
     parameters: APPLY_PATCH_PARAMS,

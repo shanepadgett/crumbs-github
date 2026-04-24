@@ -14,11 +14,11 @@ import {
   type PatchFailure,
   type PatchOperation,
 } from "./patch-parser.js";
-import { resolveExistingPath, resolveMutationPath } from "./path-policy.js";
+import { pathExists, resolveExistingPath, resolveMutationPath } from "./path-policy.js";
 
 export interface ApplyPatchChange {
   sectionIndex: number;
-  kind: "add" | "update" | "delete";
+  kind: "add" | "replace" | "update" | "delete";
   path: string;
   move?: { from: string; to: string };
   linesAdded: number;
@@ -150,6 +150,16 @@ async function applyAdd(cwd: string, operation: Extract<PatchOperation, { type: 
   return target.inputPath;
 }
 
+async function applyReplace(cwd: string, operation: Extract<PatchOperation, { type: "replace" }>) {
+  const target = await resolveExistingPath(cwd, operation.path, "file");
+  const current = await readFile(target.canonicalPath, "utf8");
+  await writeFile(target.canonicalPath, operation.content, "utf8");
+  return {
+    replaced: target.inputPath,
+    linesRemoved: countLogicalLines(current),
+  };
+}
+
 async function applyDelete(cwd: string, operation: Extract<PatchOperation, { type: "delete" }>) {
   const target = await resolveExistingPath(cwd, operation.path, "file");
   const current = await readFile(target.canonicalPath, "utf8");
@@ -227,6 +237,115 @@ function collectCoupledOperations(operations: PatchOperation[]): Map<number, Set
   return coupled;
 }
 
+interface OperationPathUse {
+  sectionIndex: number;
+  path: string;
+  displayPath: string;
+  kind: PatchOperation["type"];
+  role: "delete" | "write";
+}
+
+function describeConflictKind(left: OperationPathUse, right: OperationPathUse): string {
+  if (left.role === "write" && right.role === "write") return "multiple writes";
+  if (left.role === "delete" && right.role === "delete") return "multiple deletes";
+  return "delete/write mix";
+}
+
+function replacementGuidanceFor(left: OperationPathUse, right: OperationPathUse): string {
+  const kinds = new Set([left.kind, right.kind]);
+  if (kinds.has("add") && kinds.has("delete")) return " Use *** Replace File: for full rewrites.";
+  if (kinds.has("replace") && kinds.has("delete")) {
+    return " Replace File already overwrites existing content; do not also delete it.";
+  }
+  return " Split dependent changes into separate patches or combine them into one section.";
+}
+
+async function collectPreflightFailures(
+  cwd: string,
+  operations: PatchOperation[],
+): Promise<PatchFailure[]> {
+  const pathUses = new Map<string, OperationPathUse[]>();
+  const failures: PatchFailure[] = [];
+
+  async function addPathUse(rawPath: string, use: Omit<OperationPathUse, "path" | "displayPath">) {
+    const resolved = await resolveMutationPath(cwd, rawPath);
+    const path = resolved.canonicalPath;
+    const uses = pathUses.get(path) ?? [];
+    uses.push({ ...use, path, displayPath: resolved.inputPath });
+    pathUses.set(path, uses);
+  }
+
+  for (let index = 0; index < operations.length; index += 1) {
+    const operation = operations[index];
+    const sectionIndex = index + 1;
+
+    if (operation.type === "add" || operation.type === "replace") {
+      await addPathUse(operation.path, { sectionIndex, kind: operation.type, role: "write" });
+      continue;
+    }
+
+    if (operation.type === "delete") {
+      await addPathUse(operation.path, { sectionIndex, kind: operation.type, role: "delete" });
+      continue;
+    }
+
+    if (!operation.movePath) {
+      await addPathUse(operation.path, { sectionIndex, kind: operation.type, role: "write" });
+      continue;
+    }
+
+    const source = await resolveMutationPath(cwd, operation.path);
+    const target = await resolveMutationPath(cwd, operation.movePath);
+    if (source.canonicalPath === target.canonicalPath) {
+      await addPathUse(operation.path, { sectionIndex, kind: operation.type, role: "write" });
+      continue;
+    }
+
+    await addPathUse(operation.path, { sectionIndex, kind: operation.type, role: "delete" });
+    await addPathUse(operation.movePath, { sectionIndex, kind: operation.type, role: "write" });
+
+    if (await pathExists(target.canonicalPath)) {
+      failures.push({
+        phase: "apply",
+        sectionIndex,
+        kind: operation.type,
+        path: operation.movePath,
+        message: `move target already exists: ${operation.movePath}. Move targets must be unused to avoid overwriting existing files.`,
+      });
+    }
+  }
+
+  for (const uses of pathUses.values()) {
+    const conflictedSections = new Set<number>();
+    for (let index = 1; index < uses.length; index += 1) {
+      const left = uses[index - 1];
+      const right = uses[index];
+      const message = `conflicting operations for same path: sections ${left.sectionIndex} and ${right.sectionIndex} (${left.kind}/${right.kind}, ${describeConflictKind(left, right)}).${replacementGuidanceFor(left, right)}`;
+      if (!conflictedSections.has(left.sectionIndex)) {
+        failures.push({
+          phase: "apply",
+          sectionIndex: left.sectionIndex,
+          kind: left.kind,
+          path: left.displayPath,
+          message,
+        });
+        conflictedSections.add(left.sectionIndex);
+      }
+      if (conflictedSections.has(right.sectionIndex)) continue;
+      failures.push({
+        phase: "apply",
+        sectionIndex: right.sectionIndex,
+        kind: right.kind,
+        path: right.displayPath,
+        message,
+      });
+      conflictedSections.add(right.sectionIndex);
+    }
+  }
+
+  return failures;
+}
+
 function progressSnapshot(
   summary: ApplyPatchSummary,
   completedOperations: number,
@@ -261,6 +380,25 @@ export async function applyPatch(
   }
 
   const totalOperations = operations.length + parseFailures.length;
+  const preflightFailures = await collectPreflightFailures(cwd, operations);
+  if (preflightFailures.length > 0) {
+    const summary: ApplyPatchSummary = {
+      status: "failed",
+      added: [],
+      updated: [],
+      deleted: [],
+      moved: [],
+      linesAdded: 0,
+      linesRemoved: 0,
+      changes: [],
+      failures: [...parseFailures, ...preflightFailures],
+      completedOperations: 0,
+      totalOperations,
+    };
+    if (onProgress) await onProgress(progressSnapshot(summary, 0, totalOperations));
+    return summary;
+  }
+
   const coupled = collectCoupledOperations(operations);
   const skipOperations = new Set<number>();
   const queuePaths = await Promise.all(
@@ -314,6 +452,18 @@ export async function applyPatch(
             path: added,
             linesAdded: operation.linesAdded,
             linesRemoved: 0,
+          });
+        } else if (operation.type === "replace") {
+          const result = await applyReplace(cwd, operation);
+          summary.updated.push(result.replaced);
+          summary.linesAdded += operation.linesAdded;
+          summary.linesRemoved += result.linesRemoved;
+          summary.changes.push({
+            sectionIndex,
+            kind: "replace",
+            path: result.replaced,
+            linesAdded: operation.linesAdded,
+            linesRemoved: result.linesRemoved,
           });
         } else if (operation.type === "delete") {
           const result = await applyDelete(cwd, operation);

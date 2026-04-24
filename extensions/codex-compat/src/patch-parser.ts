@@ -2,6 +2,7 @@ import type { UpdateFileChunk } from "./patch-matcher.js";
 
 export type PatchOperation =
   | { type: "add"; path: string; content: string; linesAdded: number }
+  | { type: "replace"; path: string; content: string; linesAdded: number }
   | { type: "delete"; path: string }
   | {
       type: "update";
@@ -24,7 +25,7 @@ export interface PatchFailure {
   phase: "parse" | "apply";
   sectionIndex: number;
   path?: string;
-  kind?: "add" | "update" | "delete";
+  kind?: "add" | "replace" | "update" | "delete";
   chunkIndex?: number;
   totalChunks?: number;
   contextHint?: string;
@@ -41,6 +42,7 @@ function isTopLevelBoundary(line: string): boolean {
   return (
     line === "*** End Patch" ||
     line.startsWith("*** Add File: ") ||
+    line.startsWith("*** Replace File: ") ||
     line.startsWith("*** Delete File: ") ||
     line.startsWith("*** Update File: ")
   );
@@ -209,6 +211,15 @@ function parseSection(sectionLines: string[]): PatchOperation {
     return { type: "add", path, content: body.content, linesAdded: body.lineCount };
   }
 
+  if (header.startsWith("*** Replace File: ")) {
+    const path = requirePath(header, "*** Replace File: ");
+    const body = parseAddBody(sectionLines, 1);
+    if (body.nextIndex !== sectionLines.length) {
+      throw new Error(`Malformed Replace File section: ${path}`);
+    }
+    return { type: "replace", path, content: body.content, linesAdded: body.lineCount };
+  }
+
   if (header.startsWith("*** Delete File: ")) {
     const path = requirePath(header, "*** Delete File: ");
     if (sectionLines.length !== 1) {
@@ -239,6 +250,12 @@ function parseSection(sectionLines: string[]): PatchOperation {
 function parseHeaderMetadata(header: string): Pick<PatchFailure, "kind" | "path"> {
   if (header.startsWith("*** Add File: ")) {
     return { kind: "add", path: header.slice("*** Add File: ".length).trim() || undefined };
+  }
+  if (header.startsWith("*** Replace File: ")) {
+    return {
+      kind: "replace",
+      path: header.slice("*** Replace File: ".length).trim() || undefined,
+    };
   }
   if (header.startsWith("*** Delete File: ")) {
     return { kind: "delete", path: header.slice("*** Delete File: ".length).trim() || undefined };
@@ -306,6 +323,7 @@ export function parsePatch(input: string): ParsedPatch {
 
     if (
       !line.startsWith("*** Add File: ") &&
+      !line.startsWith("*** Replace File: ") &&
       !line.startsWith("*** Delete File: ") &&
       !line.startsWith("*** Update File: ")
     ) {
