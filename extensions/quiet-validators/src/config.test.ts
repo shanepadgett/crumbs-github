@@ -32,8 +32,8 @@ describe("quiet validator config helpers", () => {
   });
 
   test("normalizePath converts Windows separators", () => {
-    expect(normalizePath("extensions\\quiet-validators\\config.ts")).toBe(
-      "extensions/quiet-validators/config.ts",
+    expect(normalizePath("extensions\\quiet-validators\\src\\config.ts")).toBe(
+      "extensions/quiet-validators/src/config.ts",
     );
   });
 
@@ -54,6 +54,8 @@ describe("quiet validator config helpers", () => {
 
   test("matchesAny matches normalized glob patterns", () => {
     expect(matchesAny("docs/_hidden/plan.md", ["external/**", "docs\\_hidden\\**"])).toBe(true);
-    expect(matchesAny("extensions/web/search.ts", ["external/**", "docs/_hidden/**"])).toBe(false);
+    expect(matchesAny("extensions/web/src/search.ts", ["external/**", "docs/_hidden/**"])).toBe(
+      false,
+    );
   });
 });

@@ -7,8 +7,17 @@
     "pi-package"
   ],
   "workspaces": [
+    "extensions/caveman",
     "extensions/codex-compat",
+    "extensions/commit",
+    "extensions/crumbs-doctor",
+    "extensions/mcp",
     "extensions/notify",
+    "extensions/quiet-validators",
+    "extensions/skills-manager",
+    "extensions/status-table",
+    "extensions/subagents",
+    "extensions/terminal-clear",
     "extensions/web"
   ],
   "type": "module",

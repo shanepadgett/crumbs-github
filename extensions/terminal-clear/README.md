@@ -19,4 +19,4 @@ Install/load extension, then reload Pi:
 /reload
 ```
 
-The package manifest loads `terminal-clear.ts` directly through its `pi.extensions` field.
+The package manifest loads `index.ts` directly through its `pi.extensions` field.

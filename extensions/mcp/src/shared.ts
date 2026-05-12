@@ -1,5 +1,5 @@
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
-import type { CavemanEnhancement } from "../caveman/src/system-prompt.js";
+import type { CavemanEnhancement } from "../../caveman/src/system-prompt.js";
 
 export type LifecycleMode = "lazy" | "eager";
 export type TransportMode = "stdio" | "http";

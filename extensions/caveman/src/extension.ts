@@ -1,18 +1,3 @@
-/**
- * Caveman Extension
- *
- * What it does:
- * - Adds `/caveman` to toggle a caveman system prompt on/off.
- * - Replaces the full system prompt per turn when enabled.
- * - Adds optional powers that layer extra guidance onto base caveman behavior.
- *
- * How to use it:
- * - Persist defaults in crumbs config: `extensions.caveman` in `.pi/crumbs.json`.
- * - Run `/caveman on` to enable caveman mode.
- * - Run `/caveman powers` to edit project or session powers.
- * - Run `/caveman off` to restore normal prompt behavior.
- */
-
 import { existsSync } from "node:fs";
 import { createRequire } from "node:module";
 import { dirname, join } from "node:path";
@@ -23,18 +8,18 @@ import {
   type ExtensionContext,
 } from "@mariozechner/pi-coding-agent";
 import { Container, type SelectItem, SelectList, Text } from "@mariozechner/pi-tui";
-import { CRUMBS_EVENT_CAVEMAN_CHANGED } from "../shared/crumbs-events.js";
+import { CRUMBS_EVENT_CAVEMAN_CHANGED } from "../../shared/crumbs-events.js";
 import {
   loadEffectiveExtensionConfig,
   updateProjectCrumbsConfig,
-} from "../shared/config/crumbs-loader.js";
-import { asObject, type JsonObject } from "../shared/io/json-file.js";
-import { MultiSelectList, type MultiSelectItem } from "../shared/ui/multi-select-list.js";
+} from "../../shared/config/crumbs-loader.js";
+import { asObject, type JsonObject } from "../../shared/io/json-file.js";
+import { MultiSelectList, type MultiSelectItem } from "../../shared/ui/multi-select-list.js";
 import {
   getAdditionalContextConfig,
   loadAdditionalContext,
   type AdditionalContextConfig,
-} from "./src/additional-context.js";
+} from "./additional-context.js";
 import {
   buildCavemanSystemPrompt,
   CAVEMAN_NAME,
@@ -42,7 +27,7 @@ import {
   normalizeCavemanEnhancements,
   pickRandomCavemanName,
   type CavemanEnhancement,
-} from "./src/system-prompt.js";
+} from "./system-prompt.js";
 
 type CavemanState = {
   enabled: boolean;

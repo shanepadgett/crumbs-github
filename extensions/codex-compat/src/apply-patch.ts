@@ -5,9 +5,9 @@ import { Type } from "@sinclair/typebox";
 import {
   renderCollapsibleStyledTextResult,
   truncateMultilineText,
-} from "../shared/ui/collapsible-text-result.js";
-import { applyPatch, type ApplyPatchSummary } from "./src/patch-executor.js";
-import { getCodexCompatCapabilities } from "./src/capabilities.js";
+} from "../../shared/ui/collapsible-text-result.js";
+import { applyPatch, type ApplyPatchSummary } from "./patch-executor.js";
+import { getCodexCompatCapabilities } from "./capabilities.js";
 
 const COMPAT_TOOL_NAMES = new Set(["apply_patch", "view_image"]);
 const SUPPRESSED_BUILTINS = new Set(["edit", "write"]);

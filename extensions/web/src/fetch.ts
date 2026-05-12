@@ -1,19 +1,3 @@
-/**
- * Web Fetch Extension
- *
- * What it does:
- * - Adds a `webfetch` tool to fetch URL content as markdown/text/html.
- * - Supports inline image return and output truncation for large pages.
- *
- * How to use it:
- * - Use it directly in the current Pi session to inspect a specific URL.
- * - Prefer this when you need raw page content, not synthesized research.
- * - The `web-research` subagent uses this tool for source inspection.
- *
- * Example:
- * - "Fetch https://bun.sh/docs and return markdown"
- */
-
 import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
 import { Text } from "@mariozechner/pi-tui";
 import { Type } from "@sinclair/typebox";
@@ -27,9 +11,9 @@ import {
   WEBFETCH_DEFAULT_TIMEOUT,
   WEBFETCH_MAX_BYTES,
   withTruncation,
-} from "./shared/common.js";
-import { htmlToMarkdown, htmlToText } from "./shared/html.js";
-import { assertUrlAllowed } from "./shared/permissions.js";
+} from "../shared/common.js";
+import { htmlToMarkdown, htmlToText } from "../shared/html.js";
+import { assertUrlAllowed } from "../shared/permissions.js";
 
 const WEBFETCH_PARAMS = Type.Object({
   url: Type.String({ description: "URL to fetch (http:// or https://)" }),

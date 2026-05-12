@@ -1,9 +1,9 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
-import { normalizeCavemanEnhancements } from "../caveman/src/system-prompt.js";
-import { loadEffectiveExtensionConfig } from "../shared/config/crumbs-loader.js";
-import { asObject } from "../shared/io/json-file.js";
+import { normalizeCavemanEnhancements } from "../../caveman/src/system-prompt.js";
+import { loadEffectiveExtensionConfig } from "../../shared/config/crumbs-loader.js";
+import { asObject } from "../../shared/io/json-file.js";
 import { DirectMcpClient } from "./client.js";
 import {
   type CavemanGateState,

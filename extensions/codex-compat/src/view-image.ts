@@ -2,7 +2,7 @@ import { realpath, stat } from "node:fs/promises";
 import { isAbsolute, resolve } from "node:path";
 import { createReadTool, type ExtensionAPI } from "@mariozechner/pi-coding-agent";
 import { Type } from "@sinclair/typebox";
-import { getCodexCompatCapabilities } from "./src/capabilities.js";
+import { getCodexCompatCapabilities } from "./capabilities.js";
 
 const VIEW_IMAGE_PARAMS = Type.Object({
   path: Type.String({ description: "Path to a local image file" }),

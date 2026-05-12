@@ -2,7 +2,7 @@
 
 Minimal Codex compatibility mode for Pi.
 
-This package exposes three extensions:
+This package exposes one extension entry with three capabilities:
 
 - `apply-patch` activates Codex-style `apply_patch` behavior and toolset switching
 - `view-image` provides `view_image` for image-capable compat models

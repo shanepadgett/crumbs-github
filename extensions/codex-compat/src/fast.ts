@@ -1,11 +1,11 @@
 import type { Model } from "@mariozechner/pi-ai";
 import type { ExtensionAPI, ExtensionContext } from "@mariozechner/pi-coding-agent";
-import { CRUMBS_EVENT_FAST_CHANGED } from "../shared/crumbs-events.js";
+import { CRUMBS_EVENT_FAST_CHANGED } from "../../shared/crumbs-events.js";
 import {
   loadEffectiveExtensionConfig,
   updateGlobalCrumbsConfig,
-} from "../shared/config/crumbs-loader.js";
-import { asObject } from "../shared/io/json-file.js";
+} from "../../shared/config/crumbs-loader.js";
+import { asObject } from "../../shared/io/json-file.js";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);

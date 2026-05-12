@@ -1,7 +1,7 @@
 import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
 import { Text } from "@mariozechner/pi-tui";
-import { renderCollapsibleTextResult } from "../shared/ui/collapsible-text-result.js";
-import { notifyForSessionStart } from "../shared/ui/notify.js";
+import { renderCollapsibleTextResult } from "../../shared/ui/collapsible-text-result.js";
+import { notifyForSessionStart } from "../../shared/ui/notify.js";
 import {
   collectRegistryDiagnostics,
   formatDiagnosticSummary,
@@ -10,8 +10,8 @@ import {
   resolveRunnableAgents,
   clearAgentRegistryCache,
   discoverAgents,
-} from "./src/agents.js";
-import { runCreateCommand } from "./src/create/command.js";
+} from "./agents.js";
+import { runCreateCommand } from "./create/command.js";
 import {
   formatWorkflowLabel,
   getDiagnosticResultColor,
@@ -21,10 +21,10 @@ import {
   renderWorkflowBlock,
   renderWorkflowSummary,
   renderWorkflow,
-} from "./src/render.js";
-import { executeWorkflow } from "./src/run.js";
-import type { AgentIssue, AgentSpec, WorkflowResult } from "./src/types.js";
-import { TOOL_PARAMS, resolveWorkflow, workflowHasFailures } from "./src/workflow.js";
+} from "./render.js";
+import { executeWorkflow } from "./run.js";
+import type { AgentIssue, AgentSpec, WorkflowResult } from "./types.js";
+import { TOOL_PARAMS, resolveWorkflow, workflowHasFailures } from "./workflow.js";
 
 function formatRegistryIssueNotice(
   diagnostics: AgentIssue[],

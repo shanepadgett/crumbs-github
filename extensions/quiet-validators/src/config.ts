@@ -1,4 +1,4 @@
-import { loadEffectiveCrumbsExtensionsConfig } from "../shared/config/crumbs-loader.js";
+import { loadEffectiveCrumbsExtensionsConfig } from "../../shared/config/crumbs-loader.js";
 
 export function asRecord(value: unknown): Record<string, unknown> | null {
   if (!value || typeof value !== "object" || Array.isArray(value)) return null;

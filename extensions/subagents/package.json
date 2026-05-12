@@ -4,6 +4,6 @@
   "version": "0.1.0",
   "type": "module",
   "pi": {
-    "extensions": ["./subagents.ts"]
+    "extensions": ["./index.ts"]
   }
 }

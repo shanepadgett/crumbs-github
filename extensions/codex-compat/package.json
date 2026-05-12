@@ -3,6 +3,6 @@
   "private": true,
   "type": "module",
   "pi": {
-    "extensions": ["./apply-patch.ts", "./view-image.ts", "./fast.ts"]
+    "extensions": ["./index.ts"]
   }
 }

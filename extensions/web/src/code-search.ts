@@ -1,17 +1,3 @@
-/**
- * Web Search Extension
- *
- * What it does:
- * - Adds a `websearch` tool backed by Exa's MCP endpoint.
- * - Returns concise search context text suitable for follow-up fetch/summarize steps.
- *
- * How to use it:
- * - Use it directly when the current agent needs to discover relevant URLs.
- *
- * Example:
- * - "Search for Bun HTMLRewriter docs and show the most relevant results"
- */
-
 import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
 import { Text } from "@mariozechner/pi-tui";
 import { Type } from "@sinclair/typebox";
@@ -21,61 +7,41 @@ import {
   truncateInline,
   WEBSEARCH_DEFAULT_TIMEOUT,
   withTruncation,
-} from "./shared/common.js";
-import { assertUrlAllowed } from "./shared/permissions.js";
+} from "../shared/common.js";
+import { assertUrlAllowed } from "../shared/permissions.js";
 
 const EXA_URL = "https://mcp.exa.ai/mcp";
 
-const WEBSEARCH_PARAMS = Type.Object({
-  query: Type.String({ description: "Web search query" }),
-  numResults: Type.Optional(
-    Type.Number({ description: "Number of results to request from Exa (default: 8)" }),
-  ),
-  livecrawl: Type.Optional(
-    Type.Union([Type.Literal("fallback"), Type.Literal("preferred")], {
-      description:
-        "Live crawl mode. fallback = use live crawl when cache is missing. preferred = prioritize live crawl.",
-    }),
-  ),
-  type: Type.Optional(
-    Type.Union([Type.Literal("auto"), Type.Literal("fast")], {
-      description: "Search depth mode",
-    }),
-  ),
-  contextMaxCharacters: Type.Optional(
-    Type.Number({ description: "Max context characters returned by Exa" }),
+const CODESEARCH_PARAMS = Type.Object({
+  query: Type.String({ description: "Code/documentation search query" }),
+  tokensNum: Type.Optional(
+    Type.Number({ description: "Target context token budget (default: 5000)" }),
   ),
   timeout: Type.Optional(
     Type.Number({ description: "Timeout in seconds (default: 25, max: 600)" }),
   ),
 });
 
-interface WebSearchDetails {
+interface CodeSearchDetails {
   query: string;
-  numResults: number;
-  livecrawl: "fallback" | "preferred";
-  type: "auto" | "fast";
-  contextMaxCharacters?: number;
+  tokensNum: number;
   truncation?: unknown;
 }
 
-interface SearchRequest {
+interface CodeSearchRequest {
   jsonrpc: "2.0";
   id: number;
   method: "tools/call";
   params: {
-    name: "web_search_exa";
+    name: "get_code_context_exa";
     arguments: {
       query: string;
-      type: "auto" | "fast";
-      numResults: number;
-      livecrawl: "fallback" | "preferred";
-      contextMaxCharacters?: number;
+      tokensNum: number;
     };
   };
 }
 
-function parseSearchPayload(raw: string): string | undefined {
+function parseCodePayload(raw: string): string | undefined {
   let parsed: unknown;
   try {
     parsed = JSON.parse(raw);
@@ -100,45 +66,44 @@ function parseSearchPayload(raw: string): string | undefined {
   return text;
 }
 
-function parseSearchText(raw: string): string | undefined {
+function parseCodeSearchText(raw: string): string | undefined {
   const lines = raw.split("\n");
   for (const line of lines) {
     if (!line.startsWith("data: ")) continue;
-    const payload = parseSearchPayload(line.slice(6));
+    const payload = parseCodePayload(line.slice(6));
     if (payload) return payload;
   }
   return undefined;
 }
 
-export default function webSearchExtension(pi: ExtensionAPI) {
+export default function codeSearchExtension(pi: ExtensionAPI) {
   pi.registerTool({
-    name: "websearch",
-    label: "Web Search",
+    name: "codesearch",
+    label: "Code Search",
     description:
-      "Search the web through Exa MCP. Returns concise search context text. Output is truncated to 2000 lines or 50KB.",
-    promptSnippet: "Search the public web for current or external information",
+      "Search code and documentation context through Exa MCP. Returns concise context text. Output is truncated to 2000 lines or 50KB.",
+    promptSnippet: "Search code/documentation context for implementation details",
     promptGuidelines: [
-      "Use websearch before webfetch when you need to discover relevant URLs.",
-      "Prefer targeted queries with entities (project name, doc page, version).",
-      "Use websearch for simple factual lookups like latest versions, release dates, and official doc URLs.",
+      "Use codesearch for API usage patterns, code examples, and implementation-oriented queries.",
+      "Use websearch when you need broad discovery of pages before fetching.",
+      "Use codesearch for simple implementation lookups when you want examples or docs context without delegating a research task.",
       "Use the web-research subagent instead when several searches/fetches and synthesis are needed.",
     ],
-    parameters: WEBSEARCH_PARAMS,
+    parameters: CODESEARCH_PARAMS,
     renderCall(args, theme) {
       const query = truncateInline((args.query ?? "").trim(), 90);
-      const mode = args.type ?? "auto";
-      const count = args.numResults ?? 8;
+      const tokensNum = args.tokensNum ?? 5000;
       const text =
-        `${theme.fg("toolTitle", theme.bold("websearch"))} ` +
+        `${theme.fg("toolTitle", theme.bold("codesearch"))} ` +
         `${theme.fg("accent", query || "…")} ` +
-        `${theme.fg("muted", `(${mode}, n=${count})`)}`;
+        `${theme.fg("muted", `(tokens=${tokensNum})`)}`;
       return new Text(text, 0, 0);
     },
     renderResult(result, { expanded, isPartial }, theme) {
       if (isPartial) {
         const text = result.content.find((c) => c.type === "text");
         if (text?.type === "text") return new Text(theme.fg("warning", text.text), 0, 0);
-        return new Text(theme.fg("warning", "Searching web..."), 0, 0);
+        return new Text(theme.fg("warning", "Searching code context..."), 0, 0);
       }
 
       if (!expanded) {
@@ -160,25 +125,17 @@ export default function webSearchExtension(pi: ExtensionAPI) {
     async execute(_toolCallId, params, signal, _onUpdate, ctx) {
       await assertUrlAllowed(ctx.cwd, EXA_URL);
       const timeout = clampTimeout(params.timeout, WEBSEARCH_DEFAULT_TIMEOUT);
-      const mode = (params.type ?? "auto") as "auto" | "fast";
-      const crawl = (params.livecrawl ?? "fallback") as "fallback" | "preferred";
-      const count = Math.max(1, Math.min(Math.floor(params.numResults ?? 8), 12));
-      const contextMaxCharacters = params.contextMaxCharacters
-        ? Math.max(500, Math.min(Math.floor(params.contextMaxCharacters), 30_000))
-        : undefined;
+      const tokensNum = Math.max(500, Math.min(Math.floor(params.tokensNum ?? 5000), 20_000));
 
-      const body: SearchRequest = {
+      const body: CodeSearchRequest = {
         jsonrpc: "2.0",
         id: 1,
         method: "tools/call",
         params: {
-          name: "web_search_exa",
+          name: "get_code_context_exa",
           arguments: {
             query: params.query,
-            type: mode,
-            numResults: count,
-            livecrawl: crawl,
-            contextMaxCharacters,
+            tokensNum,
           },
         },
       };
@@ -203,24 +160,24 @@ export default function webSearchExtension(pi: ExtensionAPI) {
 
         if (!response.ok) {
           const text = await response.text();
-          throw new Error(`Search request failed (${response.status}): ${text}`);
+          throw new Error(`Code search request failed (${response.status}): ${text}`);
         }
 
         const raw = await response.text();
-        const output = parseSearchText(raw);
+        const output = parseCodeSearchText(raw);
 
         if (!output) {
           return {
             content: [
-              { type: "text", text: "No search results found. Try a more specific query." },
+              {
+                type: "text",
+                text: "No code context found. Try a more specific query with library/language names.",
+              },
             ],
             details: {
               query: params.query,
-              numResults: count,
-              livecrawl: crawl,
-              type: mode,
-              contextMaxCharacters,
-            } as WebSearchDetails,
+              tokensNum,
+            } as CodeSearchDetails,
           };
         }
 
@@ -229,16 +186,13 @@ export default function webSearchExtension(pi: ExtensionAPI) {
           content: [{ type: "text", text: cut.text }],
           details: {
             query: params.query,
-            numResults: count,
-            livecrawl: crawl,
-            type: mode,
-            contextMaxCharacters,
+            tokensNum,
             truncation: cut.truncation,
-          } as WebSearchDetails,
+          } as CodeSearchDetails,
         };
       } catch (error) {
         if (error instanceof Error && error.name === "AbortError") {
-          throw new Error(`Web search timed out after ${timeout}s`);
+          throw new Error(`Code search timed out after ${timeout}s`);
         }
         throw error;
       } finally {
