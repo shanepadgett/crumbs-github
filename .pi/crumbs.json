@@ -7,7 +7,13 @@
         "improve",
         "architecture",
         "typescript"
-      ]
+      ],
+      "additionalContext": {
+        "all": [
+          "AGENTS.md"
+        ],
+        "powers": {}
+      }
     },
     "quietMarkdownlint": {
       "excludeGlobs": [
