@@ -1,3 +1,4 @@
+import type { CommitConfig } from "./config.js";
 import type { CommitEvidence } from "./evidence.js";
 
 function indent(text: string, prefix = "  "): string {
@@ -7,7 +8,22 @@ function indent(text: string, prefix = "  "): string {
     .join("\n");
 }
 
-export function renderCommitPrompt(evidence: CommitEvidence): string {
+export function renderCommitPrompt(evidence: CommitEvidence, config: CommitConfig): string {
+  const allowedTypes = config.allowedTypes.join(", ");
+  const breakingChangeInstructions = config.allowBreakingChangeMarker
+    ? [
+        `- Allowed commit types: ${allowedTypes}.`,
+        "- Choose only from allowed commit types.",
+        "- You may add `!` after the type only for true breaking changes, e.g. `feat!: drop legacy config`.",
+        "- Do not use `!` for broad internal refactors unless public or user-facing contract breaks.",
+        "- If using `!`, include a `BREAKING CHANGE:` footer when evidence clearly identifies migration impact.",
+      ]
+    : [
+        `- Allowed commit types: ${allowedTypes}.`,
+        "- Choose only from allowed commit types.",
+        "- Do not use the `!` breaking-change marker in commit subjects.",
+      ];
+
   return [
     "BEGIN INJECTED /commit CONTEXT",
     "You are executing `/commit`.",
@@ -71,6 +87,7 @@ export function renderCommitPrompt(evidence: CommitEvidence): string {
     "- Match recent commit subject style when choosing messages.",
     "- Execute commits, do not stop at plan-only response.",
     "- Use unscoped conventional commit format: `type: concise why-action summary`.",
+    ...breakingChangeInstructions,
     "- Final response concise: success/fail per group with commit hash + message, or short failure reason.",
     "",
     "END INJECTED /commit CONTEXT",

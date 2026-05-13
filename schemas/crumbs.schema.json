@@ -31,6 +31,9 @@
         "codexCompat": {
           "$ref": "#/$defs/codexCompatConfig"
         },
+        "commit": {
+          "$ref": "#/$defs/commitConfig"
+        },
         "caveman": {
           "$ref": "#/$defs/cavemanConfig"
         },
@@ -150,6 +153,41 @@
           "type": "boolean",
           "default": false,
           "description": "Enable OpenAI/OpenAI Codex priority service tier for supported requests."
+        }
+      },
+      "additionalProperties": false
+    },
+    "commitConfig": {
+      "type": "object",
+      "properties": {
+        "allowedTypes": {
+          "type": "array",
+          "description": "Conventional commit types the /commit agent may use. Custom repo-specific types are allowed. When provided, this replaces the built-in default list.",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "pattern": "^[A-Za-z][A-Za-z0-9-]*$"
+          },
+          "uniqueItems": true,
+          "minItems": 1,
+          "default": [
+            "feat",
+            "fix",
+            "docs",
+            "style",
+            "refactor",
+            "perf",
+            "test",
+            "build",
+            "ci",
+            "chore",
+            "revert"
+          ]
+        },
+        "allowBreakingChangeMarker": {
+          "type": "boolean",
+          "default": true,
+          "description": "Allow the /commit agent to use the Conventional Commits ! marker, such as feat! or fix!, only for true breaking changes."
         }
       },
       "additionalProperties": false

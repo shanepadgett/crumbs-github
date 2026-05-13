@@ -1,4 +1,5 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import { loadCommitConfig } from "./config.js";
 import { collectCommitEvidence } from "./evidence.js";
 import { renderCommitPrompt } from "./prompt.js";
 import { runCommitAgent } from "./run.js";
@@ -39,7 +40,8 @@ export default function commitExtension(pi: ExtensionAPI): void {
         return;
       }
 
-      const prompt = renderCommitPrompt(evidence);
+      const config = await loadCommitConfig(evidence.repoRoot);
+      const prompt = renderCommitPrompt(evidence, config);
 
       try {
         ctx.ui.notify("/commit working…", "info");

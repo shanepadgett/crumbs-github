@@ -84,6 +84,17 @@ const KNOWN_TYPE_RULES: Array<{
   },
   { keyPath: "extensions.codexCompat", expected: "object", validate: expectsObject },
   { keyPath: "extensions.codexCompat.fast", expected: "boolean", validate: expectsBoolean },
+  { keyPath: "extensions.commit", expected: "object", validate: expectsObject },
+  {
+    keyPath: "extensions.commit.allowedTypes",
+    expected: "string[]",
+    validate: expectsStringArray,
+  },
+  {
+    keyPath: "extensions.commit.allowBreakingChangeMarker",
+    expected: "boolean",
+    validate: expectsBoolean,
+  },
   { keyPath: "extensions.caveman", expected: "object", validate: expectsObject },
   { keyPath: "extensions.caveman.enabled", expected: "boolean", validate: expectsBoolean },
   {
