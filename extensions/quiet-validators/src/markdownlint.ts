@@ -13,7 +13,7 @@ import {
   asStringArray,
   matchesAny,
   normalizePath,
-  readExtensionConfig,
+  readProjectExtensionConfig,
 } from "./config.js";
 
 const IGNORED_DIRECTORIES = new Set([
@@ -61,10 +61,10 @@ type MarkdownConfig = {
 };
 
 async function loadConfig(cwd: string): Promise<MarkdownConfig> {
-  const extensions = await readExtensionConfig(cwd);
+  const extensions = await readProjectExtensionConfig(cwd);
   const config = asRecord(extensions?.quietMarkdownlint);
   return {
-    enabled: asBoolean(config?.enabled, true),
+    enabled: asBoolean(config?.enabled, false),
     excludeGlobs: asStringArray(config?.excludeGlobs),
   };
 }
