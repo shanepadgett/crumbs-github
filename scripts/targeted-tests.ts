@@ -1,4 +1,4 @@
-import { existsSync } from "node:fs";
+import { existsSync, readdirSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 
 function gitLines(args: string[]): string[] {
@@ -49,6 +49,23 @@ function colocatedTests(path: string): string[] {
   return [`${base}.test.ts`, `${base}.spec.ts`].filter((candidate) => existsSync(candidate));
 }
 
+function hasTestsUnder(path: string): boolean {
+  try {
+    const entries = readdirSync(path, { withFileTypes: true });
+    for (const entry of entries) {
+      if (entry.name === "node_modules" || entry.name.startsWith(".")) continue;
+
+      const childPath = `${path}/${entry.name}`;
+      if (entry.isDirectory() && hasTestsUnder(childPath)) return true;
+      if (entry.isFile() && isTestFile(childPath)) return true;
+    }
+  } catch {
+    return false;
+  }
+
+  return false;
+}
+
 function chooseTargets(files: string[]): string[] | undefined {
   if (files.length === 0) return undefined;
   if (files.some(isFullSuiteTrigger)) return undefined;
@@ -68,7 +85,7 @@ function chooseTargets(files: string[]): string[] | undefined {
     }
 
     const root = extensionRoot(file);
-    if (root) targets.add(root);
+    if (root && hasTestsUnder(root)) targets.add(root);
   }
 
   return targets.size > 0 ? Array.from(targets).sort() : undefined;
