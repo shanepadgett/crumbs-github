@@ -1,0 +1,10 @@
+{
+  "packages": [
+    {
+      "source": "git:github.com/shanepadgett/crumbs",
+      "extensions": [],
+      "skills": []
+    },
+    ".."
+  ]
+}

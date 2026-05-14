@@ -1,5 +1,5 @@
 {
-  "$schema": "../schemas/crumbs.schema.json",
+  "$schema": "https://raw.githubusercontent.com/shanepadgett/crumbs/refs/heads/main/schemas/crumbs.schema.json",
   "extensions": {
     "caveman": {
       "enabled": true,

@@ -352,12 +352,30 @@ async function initProjectCrumbs(
   return { created: true, path: projectCrumbsPath };
 }
 
+async function updateProjectCrumbsSchema(
+  cwd: string,
+): Promise<{ updated: boolean; path: string; schemaUrl: string }> {
+  const projectCrumbsPath = await getProjectCrumbsPath(cwd);
+  const schemaUrl = await resolveSchemaUrlFromPiSettings(cwd);
+
+  if (!(await fileExists(projectCrumbsPath))) {
+    return { updated: false, path: projectCrumbsPath, schemaUrl };
+  }
+
+  const config = await readJsonObjectStrict(projectCrumbsPath);
+  config.$schema = schemaUrl;
+  await writeJsonObject(projectCrumbsPath, config);
+
+  return { updated: true, path: projectCrumbsPath, schemaUrl };
+}
+
 export default function crumbsDoctorExtension(pi: ExtensionAPI): void {
   pi.registerCommand("crumbs", {
-    description: "Crumbs utilities. Usage: /crumbs doctor | /crumbs init [--force]",
+    description:
+      "Crumbs utilities. Usage: /crumbs doctor | /crumbs init [--force] | /crumbs schema",
     getArgumentCompletions(prefix) {
       const value = prefix.trim();
-      const options = ["doctor", "init"];
+      const options = ["doctor", "init", "schema"];
       const filtered = options.filter((option) => option.startsWith(value));
       return filtered.length > 0
         ? filtered.map((option) => ({ value: option, label: option }))
@@ -389,7 +407,25 @@ export default function crumbsDoctorExtension(pi: ExtensionAPI): void {
           return;
         }
 
-        if (ctx.hasUI) ctx.ui.notify("Usage: /crumbs doctor | /crumbs init [--force]", "warning");
+        if (tokens[0] === "schema") {
+          const { updated, path, schemaUrl } = await updateProjectCrumbsSchema(ctx.cwd);
+          if (!ctx.hasUI) return;
+          if (!updated) {
+            ctx.ui.notify(
+              `crumbs schema skipped: ${path} does not exist. Use /crumbs init to create it.`,
+              "warning",
+            );
+            return;
+          }
+          ctx.ui.notify(`crumbs schema updated ${path}\n${schemaUrl}`, "info");
+          return;
+        }
+
+        if (ctx.hasUI)
+          ctx.ui.notify(
+            "Usage: /crumbs doctor | /crumbs init [--force] | /crumbs schema",
+            "warning",
+          );
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
         if (ctx.hasUI) ctx.ui.notify(`[crumbs-doctor] failed: ${message}`, "error");
