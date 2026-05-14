@@ -66,7 +66,8 @@ function buildCompatPromptDelta(): string {
     "- Use one Update File section with *** Move to for combined move+edit operations. Move targets must not already exist.",
     "- Do not include more than one Add/Replace/Update/Delete section for the same path in one patch. Use Replace File for full rewrites.",
     "- For Add File and Replace File sections, only lines prefixed with + are file content.",
-    "- If apply_patch reports a saved retry patch, retry with input set to @.pi/local/apply-patch-attempts/<id>.failed.patch after fixing that file.",
+    "- If apply_patch reports a saved retry patch, inspect and edit that .failed.patch file, then retry with input set to @.pi/local/apply-patch-attempts/<id>.failed.patch.",
+    "- Prefer fixing saved retry patches over regenerating large patch bodies; this preserves prior generated code and avoids wasted tokens.",
     '- Use view_image for local image inspection; pass detail: "original" only when the current model supports it.',
   ].join("\n");
 }
@@ -591,7 +592,8 @@ export default function codexCompatApplyPatchExtension(pi: ExtensionAPI) {
       "Do not include more than one Add/Replace/Update/Delete section for the same path in one patch. Use Replace File for full rewrites.",
       "In Add File and Replace File sections, only + lines are treated as content.",
       "Use *** End of File in update chunks when the match should be EOF-sensitive.",
-      "If a patch fails and the result reports a saved retry patch, fix that file and retry by passing @.pi/local/apply-patch-attempts/<id>.failed.patch as input.",
+      "If a patch fails and the result reports a saved retry patch, inspect and edit that .failed.patch file, then retry by passing @.pi/local/apply-patch-attempts/<id>.failed.patch as input.",
+      "Prefer fixing saved retry patches over regenerating large patch bodies; this preserves prior generated code and avoids wasted tokens.",
       APPLY_PATCH_EXAMPLE,
       "Put the full patch text in the input field.",
     ],
