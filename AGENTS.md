@@ -41,7 +41,3 @@
 - This includes `tsc`, lint, format, test, markdownlint, typecheck, build verification, or any repo validation command.
 - Reason: repo has silent/background validation path. Manual validation wastes tool calls, burns context, and duplicates signals user already receives.
 - Assume user will be informed of validation failures externally. Do not “double check” on your own.
-
-## Safety boundary (IMPORTANT)
-
-Do not operate outside current working directory until sandboxing is introduced.
