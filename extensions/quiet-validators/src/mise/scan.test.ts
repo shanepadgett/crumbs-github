@@ -11,6 +11,8 @@ function config(overrides: Partial<MiseTaskConfig> = {}): MiseTaskConfig {
     name: null,
     task: "check",
     trackedExtensions: [".ts"],
+    globalExcludeGlobs: [],
+    includeGlobs: [],
     excludeGlobs: [],
     ...overrides,
   };
@@ -25,8 +27,24 @@ describe("mise input scanning", () => {
     expect(shouldTrackPath("dist/app.ts", taskConfig)).toBe(false);
   });
 
+  test("shouldTrackPath applies global excludes before includes", () => {
+    const taskConfig = config({
+      globalExcludeGlobs: ["external/**"],
+      includeGlobs: ["src/**", "external/special/**"],
+      excludeGlobs: ["src/generated/**"],
+    });
+
+    expect(shouldTrackPath("src/app.ts", taskConfig)).toBe(true);
+    expect(shouldTrackPath("tests/app.ts", taskConfig)).toBe(false);
+    expect(shouldTrackPath("src/generated/app.ts", taskConfig)).toBe(false);
+    expect(shouldTrackPath("external/special/app.ts", taskConfig)).toBe(false);
+  });
+
   test("shouldSkipDirectory probes exclude globs", () => {
     expect(shouldSkipDirectory("dist", config({ excludeGlobs: ["dist/**"] }))).toBe(true);
+    expect(shouldSkipDirectory("external", config({ globalExcludeGlobs: ["external/**"] }))).toBe(
+      true,
+    );
     expect(shouldSkipDirectory("src", config({ excludeGlobs: ["dist/**"] }))).toBe(false);
   });
 

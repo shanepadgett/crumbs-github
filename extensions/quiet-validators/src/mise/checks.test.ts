@@ -8,6 +8,8 @@ function config(overrides: Partial<MiseTaskConfig> = {}): MiseTaskConfig {
     name: null,
     task: "check:web",
     trackedExtensions: [".ts"],
+    globalExcludeGlobs: [],
+    includeGlobs: [],
     excludeGlobs: [],
     ...overrides,
   };

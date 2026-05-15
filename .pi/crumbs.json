@@ -1,5 +1,5 @@
 {
-  "$schema": "https://raw.githubusercontent.com/shanepadgett/crumbs/refs/heads/main/schemas/crumbs.schema.json",
+  "$schema": "../schemas/crumbs.schema.json",
   "extensions": {
     "caveman": {
       "enabled": true,
@@ -10,30 +10,27 @@
       }
     },
     "quietMiseTask": {
+      "globalExcludeGlobs": ["external/**", "docs/_hidden/**"],
       "configs": [
         {
           "name": "config",
           "task": "check:config",
-          "trackedExtensions": [".json", ".toml"],
-          "excludeGlobs": ["external/**", "node_modules/**"]
+          "trackedExtensions": [".json", ".toml"]
         },
         {
           "enabled": true,
-          "excludeGlobs": ["node_modules/**", "dist/**", "build/**"],
           "name": "ts",
           "task": "check:ts",
           "trackedExtensions": [".js", ".jsx", ".ts", ".tsx"]
         },
         {
           "enabled": true,
-          "excludeGlobs": ["node_modules/**"],
           "name": "markdown",
           "task": "check:markdown",
           "trackedExtensions": [".md"]
         },
         {
           "enabled": true,
-          "excludeGlobs": ["node_modules/**"],
           "name": "yaml",
           "task": "check:yaml",
           "trackedExtensions": [".yml", ".yaml"]

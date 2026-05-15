@@ -2,6 +2,8 @@ import { asObject, type JsonObject } from "../io/json-file.js";
 
 const UNION_ARRAY_PATHS = new Set([
   "extensions.quietMiseTask.excludeGlobs",
+  "extensions.quietMiseTask.globalExcludeGlobs",
+  "extensions.quietMiseTask.includeGlobs",
   "extensions.quietMiseTask.trackedExtensions",
 ]);
 
@@ -30,6 +32,24 @@ function mergeArray(path: string, globalValue: unknown[], projectValue: unknown[
   return projectValue;
 }
 
+function withMergedQuietMiseTaskGlobals(
+  globalObject: JsonObject,
+  projectObject: JsonObject,
+): JsonObject {
+  const merged: JsonObject = { ...projectObject };
+  if (
+    Array.isArray(globalObject.globalExcludeGlobs) ||
+    Array.isArray(projectObject.globalExcludeGlobs)
+  ) {
+    merged.globalExcludeGlobs = mergeArray(
+      "extensions.quietMiseTask.globalExcludeGlobs",
+      Array.isArray(globalObject.globalExcludeGlobs) ? globalObject.globalExcludeGlobs : [],
+      Array.isArray(projectObject.globalExcludeGlobs) ? projectObject.globalExcludeGlobs : [],
+    );
+  }
+  return merged;
+}
+
 function mergeNode(path: string, globalValue: unknown, projectValue: unknown): unknown {
   if (Array.isArray(globalValue) && Array.isArray(projectValue)) {
     return mergeArray(path, globalValue, projectValue);
@@ -39,7 +59,7 @@ function mergeNode(path: string, globalValue: unknown, projectValue: unknown): u
   const projectObject = asObject(projectValue);
   if (globalObject && projectObject) {
     if (path === "extensions.quietMiseTask" && Array.isArray(projectObject.configs)) {
-      return projectObject;
+      return withMergedQuietMiseTaskGlobals(globalObject, projectObject);
     }
 
     if (
@@ -47,7 +67,7 @@ function mergeNode(path: string, globalValue: unknown, projectValue: unknown): u
       Array.isArray(globalObject.configs) &&
       !Array.isArray(projectObject.configs)
     ) {
-      return projectObject;
+      return withMergedQuietMiseTaskGlobals(globalObject, projectObject);
     }
 
     const merged: JsonObject = { ...globalObject };

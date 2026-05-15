@@ -37,7 +37,3 @@
 - When change is testable end-to-end by user, final response should include minimal test instructions.
 - For extension changes in this repo, test instructions should explicitly say to run `/reload` first.
 - Prefer project commands via `mise` tasks; run direct command only if task does not exist.
-- **Never manually run validations or checkers** unless user explicitly asks in current turn.
-- This includes `tsc`, lint, format, test, markdownlint, typecheck, build verification, or any repo validation command.
-- Reason: repo has silent/background validation path. Manual validation wastes tool calls, burns context, and duplicates signals user already receives.
-- Assume user will be informed of validation failures externally. Do not “double check” on your own.

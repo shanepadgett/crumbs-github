@@ -7,7 +7,19 @@ export type MiseTaskConfig = {
   name: string | null;
   task: string;
   trackedExtensions: string[];
+  globalExcludeGlobs: string[];
+  includeGlobs: string[];
   excludeGlobs: string[];
+};
+
+const DEFAULT_CONFIG: MiseTaskConfig = {
+  enabled: true,
+  name: null,
+  task: DEFAULT_TASK,
+  trackedExtensions: [],
+  globalExcludeGlobs: [],
+  includeGlobs: [],
+  excludeGlobs: [],
 };
 
 function normalizeTrackedExtension(value: string): string | null {
@@ -37,7 +49,10 @@ function asTask(value: unknown): string {
   return typeof value === "string" && value.trim().length > 0 ? value.trim() : DEFAULT_TASK;
 }
 
-function parseConfigEntry(value: unknown): MiseTaskConfig | null {
+function parseConfigEntry(
+  value: unknown,
+  globalExcludeGlobs: string[] = [],
+): MiseTaskConfig | null {
   const config = asRecord(value);
   if (!config) return null;
 
@@ -46,6 +61,8 @@ function parseConfigEntry(value: unknown): MiseTaskConfig | null {
     name: asOptionalName(config.name),
     task: asTask(config.task),
     trackedExtensions: asTrackedExtensions(config.trackedExtensions),
+    globalExcludeGlobs,
+    includeGlobs: asStringArray(config.includeGlobs),
     excludeGlobs: asStringArray(config.excludeGlobs),
   };
 }
@@ -53,21 +70,23 @@ function parseConfigEntry(value: unknown): MiseTaskConfig | null {
 export function parseMiseTaskConfigs(value: unknown): MiseTaskConfig[] {
   const config = asRecord(value);
   if (!config) {
-    return [
-      { enabled: true, name: null, task: DEFAULT_TASK, trackedExtensions: [], excludeGlobs: [] },
-    ];
+    return [{ ...DEFAULT_CONFIG }];
   }
+
+  const globalExcludeGlobs = asStringArray(config.globalExcludeGlobs);
 
   if (Array.isArray(config.configs)) {
     const parentEnabled = asBoolean(config.enabled, true);
     return config.configs.flatMap((entry) => {
-      const parsed = parseConfigEntry(entry);
+      const parsed = parseConfigEntry(entry, globalExcludeGlobs);
       if (parsed && !parentEnabled) parsed.enabled = false;
       return parsed ? [parsed] : [];
     });
   }
 
-  return [parseConfigEntry(config)].filter((entry): entry is MiseTaskConfig => !!entry);
+  return [parseConfigEntry(config, globalExcludeGlobs)].filter(
+    (entry): entry is MiseTaskConfig => !!entry,
+  );
 }
 
 export async function loadMiseTaskConfigs(cwd: string): Promise<MiseTaskConfig[]> {

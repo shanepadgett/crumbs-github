@@ -9,6 +9,8 @@ describe("crumbs config merge", () => {
           extensions: {
             quietMiseTask: {
               trackedExtensions: ["swift"],
+              globalExcludeGlobs: ["external/**"],
+              includeGlobs: ["Sources/**"],
               excludeGlobs: ["Generated/**"],
             },
           },
@@ -17,6 +19,8 @@ describe("crumbs config merge", () => {
           extensions: {
             quietMiseTask: {
               trackedExtensions: [".ts", ".swift"],
+              globalExcludeGlobs: [".cache/**"],
+              includeGlobs: ["src/**"],
               excludeGlobs: ["dist/**"],
             },
           },
@@ -26,6 +30,8 @@ describe("crumbs config merge", () => {
       extensions: {
         quietMiseTask: {
           trackedExtensions: [".swift", ".ts"],
+          globalExcludeGlobs: ["external/**", ".cache/**"],
+          includeGlobs: ["Sources/**", "src/**"],
           excludeGlobs: ["Generated/**", "dist/**"],
         },
       },
@@ -38,6 +44,7 @@ describe("crumbs config merge", () => {
         {
           extensions: {
             quietMiseTask: {
+              globalExcludeGlobs: ["external/**"],
               configs: [{ name: "global", task: "check:global", trackedExtensions: [".swift"] }],
             },
           },
@@ -45,6 +52,7 @@ describe("crumbs config merge", () => {
         {
           extensions: {
             quietMiseTask: {
+              globalExcludeGlobs: [".cache/**"],
               configs: [{ name: "project", task: "check:project", trackedExtensions: [".ts"] }],
             },
           },
@@ -53,6 +61,7 @@ describe("crumbs config merge", () => {
     ).toEqual({
       extensions: {
         quietMiseTask: {
+          globalExcludeGlobs: ["external/**", ".cache/**"],
           configs: [{ name: "project", task: "check:project", trackedExtensions: [".ts"] }],
         },
       },
@@ -65,6 +74,7 @@ describe("crumbs config merge", () => {
         {
           extensions: {
             quietMiseTask: {
+              globalExcludeGlobs: ["external/**"],
               enabled: false,
               task: "check:global",
               trackedExtensions: [".swift"],
@@ -82,6 +92,7 @@ describe("crumbs config merge", () => {
     ).toEqual({
       extensions: {
         quietMiseTask: {
+          globalExcludeGlobs: ["external/**"],
           configs: [{ name: "project", task: "check:project", trackedExtensions: [".ts"] }],
         },
       },
@@ -94,6 +105,7 @@ describe("crumbs config merge", () => {
         {
           extensions: {
             quietMiseTask: {
+              globalExcludeGlobs: ["external/**"],
               configs: [{ name: "global", task: "check:global", trackedExtensions: [".swift"] }],
             },
           },
@@ -110,6 +122,7 @@ describe("crumbs config merge", () => {
     ).toEqual({
       extensions: {
         quietMiseTask: {
+          globalExcludeGlobs: ["external/**"],
           task: "check:project",
           trackedExtensions: [".ts"],
         },

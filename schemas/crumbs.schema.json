@@ -74,9 +74,27 @@
           },
           "default": []
         },
+        "globalExcludeGlobs": {
+          "type": "array",
+          "description": "Path globs, relative to the repo root, excluded from every quiet mise task config. Use for repo-specific generated, vendored, or cache folders. Built-in ignored directories already include .build, .cache, .git, .gradle, .mypy_cache, .pi, .pytest_cache, .ruff_cache, .swiftpm, .tox, .venv, DerivedData, __pycache__, build, coverage, dist, node_modules, out, target, tmp, venv, and vendor.",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "default": []
+        },
+        "includeGlobs": {
+          "type": "array",
+          "description": "Path globs, relative to the repo root, that this legacy single-task config may track. When present, all other paths are ignored before per-config excludeGlobs are applied.",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "default": []
+        },
         "excludeGlobs": {
           "type": "array",
-          "description": "Extra path globs to exclude from tracked file scanning.",
+          "description": "Extra path globs, relative to the repo root, excluded from this legacy single-task config after globalExcludeGlobs and includeGlobs are applied.",
           "items": {
             "type": "string",
             "minLength": 1
@@ -122,9 +140,18 @@
           },
           "default": []
         },
+        "includeGlobs": {
+          "type": "array",
+          "description": "Path globs, relative to the repo root, that this task config may track. When present, all other paths are ignored before excludeGlobs are applied. globalExcludeGlobs still wins and cannot be rescued by includeGlobs.",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "default": []
+        },
         "excludeGlobs": {
           "type": "array",
-          "description": "Extra path globs to exclude from tracked file scanning.",
+          "description": "Extra path globs, relative to the repo root, excluded from this task config after globalExcludeGlobs and includeGlobs are applied.",
           "items": {
             "type": "string",
             "minLength": 1

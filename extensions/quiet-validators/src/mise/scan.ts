@@ -4,28 +4,50 @@ import { matchesAny, normalizePath } from "../config.js";
 import type { Snapshot } from "../core/types.js";
 import type { MiseTaskConfig } from "./config.js";
 
-const IGNORED_DIRECTORIES = new Set([
+export const BUILT_IN_IGNORED_DIRECTORIES = [
   ".build",
+  ".cache",
   ".git",
+  ".gradle",
+  ".mypy_cache",
   ".pi",
+  ".pytest_cache",
+  ".ruff_cache",
   ".swiftpm",
+  ".tox",
+  ".venv",
   "DerivedData",
+  "__pycache__",
   "build",
   "coverage",
   "dist",
   "node_modules",
   "out",
+  "target",
   "tmp",
-]);
+  "venv",
+  "vendor",
+] as const;
+
+const IGNORED_DIRECTORIES = new Set<string>(BUILT_IN_IGNORED_DIRECTORIES);
+
+function isGlobExcluded(pathValue: string, config: MiseTaskConfig): boolean {
+  return (
+    matchesAny(pathValue, config.globalExcludeGlobs) || matchesAny(pathValue, config.excludeGlobs)
+  );
+}
 
 export function shouldSkipDirectory(relativePath: string, config: MiseTaskConfig): boolean {
   const normalizedPath = normalizePath(relativePath);
   if (normalizedPath.length === 0) return false;
-  return matchesAny(`${normalizedPath}/__pi_probe__`, config.excludeGlobs);
+  return isGlobExcluded(`${normalizedPath}/__pi_probe__`, config);
 }
 
 export function shouldTrackPath(relativePath: string, config: MiseTaskConfig): boolean {
   const normalizedPath = normalizePath(relativePath);
+  if (matchesAny(normalizedPath, config.globalExcludeGlobs)) return false;
+  if (config.includeGlobs.length > 0 && !matchesAny(normalizedPath, config.includeGlobs))
+    return false;
   if (matchesAny(normalizedPath, config.excludeGlobs)) return false;
   if (config.trackedExtensions.length === 0) return false;
   return config.trackedExtensions.includes(extname(normalizedPath).toLowerCase());

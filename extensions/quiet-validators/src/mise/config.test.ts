@@ -4,7 +4,15 @@ import { asTrackedExtensions, parseMiseTaskConfigs } from "./config.js";
 describe("mise task config parsing", () => {
   test("missing config returns legacy default with no tracked extensions", () => {
     expect(parseMiseTaskConfigs(undefined)).toEqual([
-      { enabled: true, name: null, task: "check", trackedExtensions: [], excludeGlobs: [] },
+      {
+        enabled: true,
+        name: null,
+        task: "check",
+        trackedExtensions: [],
+        globalExcludeGlobs: [],
+        includeGlobs: [],
+        excludeGlobs: [],
+      },
     ]);
   });
 
@@ -14,6 +22,8 @@ describe("mise task config parsing", () => {
         enabled: false,
         task: "check:swift",
         trackedExtensions: ["swift", ".SWIFT", ""],
+        globalExcludeGlobs: ["external/**", ""],
+        includeGlobs: ["Sources/**", ""],
         excludeGlobs: ["Generated/**", ""],
       }),
     ).toEqual([
@@ -22,6 +32,8 @@ describe("mise task config parsing", () => {
         name: null,
         task: "check:swift",
         trackedExtensions: [".swift"],
+        globalExcludeGlobs: ["external/**"],
+        includeGlobs: ["Sources/**"],
         excludeGlobs: ["Generated/**"],
       },
     ]);
@@ -32,6 +44,7 @@ describe("mise task config parsing", () => {
       parseMiseTaskConfigs({
         task: "legacy",
         trackedExtensions: [".legacy"],
+        globalExcludeGlobs: ["external/**"],
         configs: [
           { name: "swift", task: "check:swift", trackedExtensions: [".swift"] },
           { task: "check:web", trackedExtensions: ["ts", "tsx"] },
@@ -43,6 +56,8 @@ describe("mise task config parsing", () => {
         name: "swift",
         task: "check:swift",
         trackedExtensions: [".swift"],
+        globalExcludeGlobs: ["external/**"],
+        includeGlobs: [],
         excludeGlobs: [],
       },
       {
@@ -50,6 +65,8 @@ describe("mise task config parsing", () => {
         name: null,
         task: "check:web",
         trackedExtensions: [".ts", ".tsx"],
+        globalExcludeGlobs: ["external/**"],
+        includeGlobs: [],
         excludeGlobs: [],
       },
     ]);
@@ -67,6 +84,8 @@ describe("mise task config parsing", () => {
         name: null,
         task: "check:web",
         trackedExtensions: [".ts"],
+        globalExcludeGlobs: [],
+        includeGlobs: [],
         excludeGlobs: [],
       },
     ]);
