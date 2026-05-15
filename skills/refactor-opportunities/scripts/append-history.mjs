@@ -12,7 +12,11 @@ if (!entriesPath || !historyPath) {
 }
 
 const input = JSON.parse(readFileSync(entriesPath, "utf-8"));
-const entries = Array.isArray(input) ? input : Array.isArray(input.entries) ? input.entries : [input];
+const entries = Array.isArray(input)
+  ? input
+  : Array.isArray(input.entries)
+    ? input.entries
+    : [input];
 
 mkdirSync(dirname(historyPath), { recursive: true });
 

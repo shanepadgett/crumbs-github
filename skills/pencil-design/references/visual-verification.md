@@ -44,27 +44,27 @@ Fix via `U()` operations -> new screenshot -> new layout check.
 
 ## When to Screenshot
 
-| Moment | Target |
-|--------|--------|
-| After building section | Section root frame |
-| After fixing issue | Affected area |
-| Design complete | Full screen/artboard |
-| After modifying existing | Changed section |
-| After bulk property updates | Affected area |
-| Comparing variants | Both side by side |
+| Moment                      | Target               |
+| --------------------------- | -------------------- |
+| After building section      | Section root frame   |
+| After fixing issue          | Affected area        |
+| Design complete             | Full screen/artboard |
+| After modifying existing    | Changed section      |
+| After bulk property updates | Affected area        |
+| Comparing variants          | Both side by side    |
 
 ## Common Screenshot-Only Issues
 
-| Issue | Symptom |
-|-------|---------|
-| Wrong font weight | Text too thin/bold |
-| Inconsistent padding | Cards have different internal space |
-| Color too similar to background | Element "disappears" |
-| Alignment drift | Elements slightly off |
-| Missing gap | Sections run together |
-| Broken auto-layout | Children stack wrong direction |
-| Icon disproportionate | Too small/large vs adjacent text |
-| Image aspect ratio | Stretched/squished |
+| Issue                           | Symptom                             |
+| ------------------------------- | ----------------------------------- |
+| Wrong font weight               | Text too thin/bold                  |
+| Inconsistent padding            | Cards have different internal space |
+| Color too similar to background | Element "disappears"                |
+| Alignment drift                 | Elements slightly off               |
+| Missing gap                     | Sections run together               |
+| Broken auto-layout              | Children stack wrong direction      |
+| Icon disproportionate           | Too small/large vs adjacent text    |
+| Image aspect ratio              | Stretched/squished                  |
 
 ## See Also
 

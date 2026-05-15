@@ -48,7 +48,8 @@ for (const workUnit of workUnits) {
   const nonGoals = extractField(workUnit.body, "Non-Goals");
   const risks = extractField(workUnit.body, "Risks");
   const whyNotConflicting = extractField(workUnit.body, "Why Not Conflicting");
-  const steps = workUnit.body.match(/#### Steps\n([\s\S]*?)(\n#### Validation|$)/m)?.[1]?.trim() ?? "";
+  const steps =
+    workUnit.body.match(/#### Steps\n([\s\S]*?)(\n#### Validation|$)/m)?.[1]?.trim() ?? "";
   const validation = workUnit.body.match(/#### Validation\n([\s\S]*)$/m)?.[1]?.trim() ?? "";
 
   const output = `---

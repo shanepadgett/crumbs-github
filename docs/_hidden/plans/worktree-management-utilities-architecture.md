@@ -128,7 +128,7 @@ Example:
 4. Join as `<repo-name>-<branch-slug>` beside the lobby path
 
 ```ts
-targetPath = join(dirname(lobbyPath), `${basename(lobbyPath)}-${slug(branchName)}`)
+targetPath = join(dirname(lobbyPath), `${basename(lobbyPath)}-${slug(branchName)}`);
 ```
 
 If the directory already exists, or Git already has a worktree at that path, creation should stop with a clear error.

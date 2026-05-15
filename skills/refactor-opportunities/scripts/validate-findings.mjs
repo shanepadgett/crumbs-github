@@ -28,7 +28,9 @@ function listMarkdown(path) {
 }
 
 function extractField(lines, label) {
-  const line = lines.find((value) => value.toLowerCase().startsWith(`- **${label.toLowerCase()}:**`));
+  const line = lines.find((value) =>
+    value.toLowerCase().startsWith(`- **${label.toLowerCase()}:**`),
+  );
   if (!line) return "";
   return line.replace(new RegExp(`^- \\*\\*${label}:\\*\\*\\s*`, "i"), "").trim();
 }
@@ -57,7 +59,8 @@ function validateSectionFile(path, content) {
   const ids = new Set();
   const counts = { high: 0, medium: 0, low: 0 };
 
-  if (blocks.length === 0 && !content.includes("None.")) issues.push("no findings and no 'None.' marker");
+  if (blocks.length === 0 && !content.includes("None."))
+    issues.push("no findings and no 'None.' marker");
 
   for (const block of blocks) {
     const lines = block.trim().split("\n");
@@ -92,7 +95,8 @@ function validateSectionFile(path, content) {
   if (!summary) issues.push("invalid summary block");
   else {
     if (summary.High !== counts.high) issues.push(`summary high ${summary.High} != ${counts.high}`);
-    if (summary.Medium !== counts.medium) issues.push(`summary medium ${summary.Medium} != ${counts.medium}`);
+    if (summary.Medium !== counts.medium)
+      issues.push(`summary medium ${summary.Medium} != ${counts.medium}`);
     if (summary.Low !== counts.low) issues.push(`summary low ${summary.Low} != ${counts.low}`);
   }
 
@@ -101,7 +105,8 @@ function validateSectionFile(path, content) {
 
 function validateReconciledFile(path, content) {
   const issues = [];
-  if (!content.match(/^# Reconciled Findings$/m)) issues.push("missing title '# Reconciled Findings'");
+  if (!content.match(/^# Reconciled Findings$/m))
+    issues.push("missing title '# Reconciled Findings'");
   if (!content.includes("## Findings")) issues.push("missing '## Findings'");
   if (!content.includes("## Summary")) issues.push("missing '## Summary'");
 
@@ -147,9 +152,14 @@ function validateReconciledFile(path, content) {
   const summary = parseSummary(content, ["Merged", "Kept Separate", "Deferred"]);
   if (!summary) issues.push("invalid summary block");
   else {
-    if (summary.Merged !== counts.merge) issues.push(`summary merged ${summary.Merged} != ${counts.merge}`);
-    if (summary["Kept Separate"] !== counts["keep-separate"]) issues.push(`summary kept separate ${summary["Kept Separate"]} != ${counts["keep-separate"]}`);
-    if (summary.Deferred !== counts.defer) issues.push(`summary deferred ${summary.Deferred} != ${counts.defer}`);
+    if (summary.Merged !== counts.merge)
+      issues.push(`summary merged ${summary.Merged} != ${counts.merge}`);
+    if (summary["Kept Separate"] !== counts["keep-separate"])
+      issues.push(
+        `summary kept separate ${summary["Kept Separate"]} != ${counts["keep-separate"]}`,
+      );
+    if (summary.Deferred !== counts.defer)
+      issues.push(`summary deferred ${summary.Deferred} != ${counts.defer}`);
   }
 
   return issues;

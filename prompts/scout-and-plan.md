@@ -1,6 +1,7 @@
 ---
 description: Scout codebase and produce minimal plan with subagents
 ---
+
 Use `subagent` tool.
 
 Run chain:

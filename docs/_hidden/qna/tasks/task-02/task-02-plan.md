@@ -459,16 +459,16 @@ return "open";
 
 Transition rules:
 
-| User action | Editable draft change | Computed state after change |
-| --- | --- | --- |
-| Initial render | `closureState = "open"`, empty answer draft | `open` |
-| Edit answer while open | mutate `answerDraft` only | `open` until complete, then `answered` |
-| Edit answer note while open | mutate answer-level note only | unchanged computed state |
-| Select/deselect `Other` | mutate `selectedOptionIds` only, preserve `otherText` draft | `answered` only when all required answer parts are complete |
-| Mark `skipped` | `closureState = "skipped"`, preserve answer draft | `skipped` |
-| Mark `needs_clarification` | `closureState = "needs_clarification"`, preserve answer draft | `needs_clarification` |
-| Edit question note while closed | mutate `questionNote` only | remains closed |
-| Reopen | `closureState = "open"`, preserve `answerDraft` and `questionNote` | `answered` if preserved answer draft is complete, else `open` |
+| User action                     | Editable draft change                                              | Computed state after change                                   |
+| ------------------------------- | ------------------------------------------------------------------ | ------------------------------------------------------------- |
+| Initial render                  | `closureState = "open"`, empty answer draft                        | `open`                                                        |
+| Edit answer while open          | mutate `answerDraft` only                                          | `open` until complete, then `answered`                        |
+| Edit answer note while open     | mutate answer-level note only                                      | unchanged computed state                                      |
+| Select/deselect `Other`         | mutate `selectedOptionIds` only, preserve `otherText` draft        | `answered` only when all required answer parts are complete   |
+| Mark `skipped`                  | `closureState = "skipped"`, preserve answer draft                  | `skipped`                                                     |
+| Mark `needs_clarification`      | `closureState = "needs_clarification"`, preserve answer draft      | `needs_clarification`                                         |
+| Edit question note while closed | mutate `questionNote` only                                         | remains closed                                                |
+| Reopen                          | `closureState = "open"`, preserve `answerDraft` and `questionNote` | `answered` if preserved answer draft is complete, else `open` |
 
 Closed-state control rules:
 
@@ -690,9 +690,7 @@ QuestionRuntimeFormResult
   - `Planned exports / signatures:`
 
     ```ts
-    export type FormValidationIssueCode =
-      | "missing_other_text"
-      | "missing_clarification_note";
+    export type FormValidationIssueCode = "missing_other_text" | "missing_clarification_note";
 
     export interface FormValidationIssue {
       questionId: string;

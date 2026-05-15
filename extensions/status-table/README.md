@@ -42,15 +42,7 @@ If you change files under `extensions/status-table/`, reload Pi before testing.
   "extensions": {
     "statusTable": {
       "enabled": true,
-      "visibleBlocks": [
-        "path",
-        "git",
-        "provider",
-        "model",
-        "caveman",
-        "context",
-        "tokens"
-      ]
+      "visibleBlocks": ["path", "git", "provider", "model", "caveman", "context", "tokens"]
     }
   }
 }

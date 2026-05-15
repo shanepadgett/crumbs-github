@@ -53,41 +53,41 @@ Reason:
 Task 01 validates only the fields the read-only shell needs now.
 
 ```ts
-type QuestionKind = "yes_no" | "multiple_choice" | "freeform"
+type QuestionKind = "yes_no" | "multiple_choice" | "freeform";
 
 interface AuthorizedQuestionRequest {
-  questions: AuthorizedQuestionNode[]
+  questions: AuthorizedQuestionNode[];
 }
 
 interface AuthorizedQuestionBase {
-  questionId: string
-  prompt: string
-  followUps?: AuthorizedQuestionNode[]
+  questionId: string;
+  prompt: string;
+  followUps?: AuthorizedQuestionNode[];
 }
 
 interface AuthorizedYesNoQuestion extends AuthorizedQuestionBase {
-  kind: "yes_no"
+  kind: "yes_no";
 }
 
 interface AuthorizedFreeformQuestion extends AuthorizedQuestionBase {
-  kind: "freeform"
+  kind: "freeform";
 }
 
 interface AuthorizedMultipleChoiceOption {
-  optionId: string
-  label: string
+  optionId: string;
+  label: string;
 }
 
 interface AuthorizedMultipleChoiceQuestion extends AuthorizedQuestionBase {
-  kind: "multiple_choice"
-  selectionMode: "single" | "multi"
-  options: AuthorizedMultipleChoiceOption[]
+  kind: "multiple_choice";
+  selectionMode: "single" | "multi";
+  options: AuthorizedMultipleChoiceOption[];
 }
 
 type AuthorizedQuestionNode =
   | AuthorizedYesNoQuestion
   | AuthorizedFreeformQuestion
-  | AuthorizedMultipleChoiceQuestion
+  | AuthorizedMultipleChoiceQuestion;
 ```
 
 Task-01 validation rules:
@@ -134,7 +134,7 @@ Minimal valid example:
 - Formula:
 
   ```ts
-  allowedFailures = 4 * (1 + extraRetryBlocksGranted)
+  allowedFailures = 4 * (1 + extraRetryBlocksGranted);
   ```
 
 - Increment `failureCount` only for a new invalid content hash.
@@ -285,23 +285,23 @@ Use `extensions/question-runtime/index.ts`, not `extensions/question-runtime.ts`
 #### 6.3 Durable state model
 
 ```ts
-export const QUESTION_RUNTIME_STATE_ENTRY = "question-runtime.state"
+export const QUESTION_RUNTIME_STATE_ENTRY = "question-runtime.state";
 
-export type RuntimeRequestStatus = "pending" | "ready" | "locked" | "aborted"
+export type RuntimeRequestStatus = "pending" | "ready" | "locked" | "aborted";
 
 export interface RuntimeRequestRecord {
-  requestId: string
-  path: string
-  projectRelativePath: string
-  status: RuntimeRequestStatus
-  failureCount: number
-  extraRetryBlocksGranted: number
-  pendingRetryDecision: boolean
-  lastProcessedContentHash?: string
+  requestId: string;
+  path: string;
+  projectRelativePath: string;
+  status: RuntimeRequestStatus;
+  failureCount: number;
+  extraRetryBlocksGranted: number;
+  pendingRetryDecision: boolean;
+  lastProcessedContentHash?: string;
 }
 
 export interface QuestionRuntimeStateSnapshot {
-  requests: RuntimeRequestRecord[]
+  requests: RuntimeRequestRecord[];
 }
 ```
 
@@ -351,7 +351,7 @@ Persistence rules:
   - `Export:`
 
     ```ts
-    export default function questionRuntimeExtension(pi: ExtensionAPI): void
+    export default function questionRuntimeExtension(pi: ExtensionAPI): void;
     ```
 
 - `Path:` `extensions/question-runtime/types.ts`

@@ -5,7 +5,9 @@ import { existsSync, readFileSync, writeFileSync } from "node:fs";
 const outputPath = process.argv[2];
 
 if (!outputPath) {
-  console.error("Usage: node record-results.mjs <output-path> --unit WU-001 --status completed --files 'a.swift,b.swift' [--note 'message']");
+  console.error(
+    "Usage: node record-results.mjs <output-path> --unit WU-001 --status completed --files 'a.swift,b.swift' [--note 'message']",
+  );
   process.exit(1);
 }
 

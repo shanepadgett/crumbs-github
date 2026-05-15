@@ -1,6 +1,7 @@
 ---
 description: Implement change through scout → planner → worker subagents
 ---
+
 Use `subagent` tool.
 
 Run chain:

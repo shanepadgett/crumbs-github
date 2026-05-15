@@ -382,17 +382,11 @@ collect transcript after durable boundary                 |
       | (QnaLedgerQuestionRecordBase & { state: "open" })
       | (QnaLedgerQuestionRecordBase & {
           state: "answered";
-          submittedOutcome: Extract<
-            SubmittedQuestionRuntimeQuestionOutcome,
-            { state: "answered" }
-          >;
+          submittedOutcome: Extract<SubmittedQuestionRuntimeQuestionOutcome, { state: "answered" }>;
         })
       | (QnaLedgerQuestionRecordBase & {
           state: "skipped";
-          submittedOutcome: Extract<
-            SubmittedQuestionRuntimeQuestionOutcome,
-            { state: "skipped" }
-          >;
+          submittedOutcome: Extract<SubmittedQuestionRuntimeQuestionOutcome, { state: "skipped" }>;
         })
       | (QnaLedgerQuestionRecordBase & {
           state: "needs_clarification";

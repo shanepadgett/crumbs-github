@@ -28,42 +28,44 @@ Overflow = unreadable clipped text, broken mobile layouts, code needing manual f
 ### Nested Components
 
 Set ref instance width to `"fill_container"` when it should fill parent:
+
 ```javascript
-card=I(container, { type: "ref", ref: "CardComponent", width: "fill_container" })
+card = I(container, { type: "ref", ref: "CardComponent", width: "fill_container" });
 ```
 
 ## Detection
 
 After inserting content:
+
 ```
 pencil_snapshot_layout({ filePath: "...", parentId: "screenId", maxDepth: 3, problemsOnly: true })
 ```
 
 ### Fixes
 
-| Problem | Fix |
-|---------|-----|
-| Text clipped horizontally | `width: "fill_container"` or reduce font size |
-| Text clipped vertically | Increase parent height, auto-height, or `maxLines` |
-| Child wider than parent | `width: "fill_container"` |
-| Children overlapping | Add `layout: "vertical"` or `"horizontal"` to parent |
-| Content outside artboard | Reduce widths/padding |
+| Problem                   | Fix                                                  |
+| ------------------------- | ---------------------------------------------------- |
+| Text clipped horizontally | `width: "fill_container"` or reduce font size        |
+| Text clipped vertically   | Increase parent height, auto-height, or `maxLines`   |
+| Child wider than parent   | `width: "fill_container"`                            |
+| Children overlapping      | Add `layout: "vertical"` or `"horizontal"` to parent |
+| Content outside artboard  | Reduce widths/padding                                |
 
 ### Fix Patterns
 
 ```javascript
 // Text overflow
-U("textNodeId", { width: "fill_container" })
+U("textNodeId", { width: "fill_container" });
 
 // Children overflow
-U("parentFrameId", { layout: "vertical", gap: 8 })
-U("child1Id", { width: "fill_container" })
+U("parentFrameId", { layout: "vertical", gap: 8 });
+U("child1Id", { width: "fill_container" });
 
 // Content touching edges
-U("contentContainerId", { paddingLeft: 16, paddingRight: 16 })
+U("contentContainerId", { paddingLeft: 16, paddingRight: 16 });
 
 // Long title truncation
-U("titleTextId", { maxLines: 1, width: "fill_container" })
+U("titleTextId", { maxLines: 1, width: "fill_container" });
 ```
 
 ## See Also

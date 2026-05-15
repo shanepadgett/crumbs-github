@@ -13,7 +13,9 @@ if (!plansDir || !outputPath) {
 
 const entries = [];
 
-for (const name of readdirSync(plansDir).filter((value) => value.endsWith(".md")).sort()) {
+for (const name of readdirSync(plansDir)
+  .filter((value) => value.endsWith(".md"))
+  .sort()) {
   const content = readFileSync(join(plansDir, name), "utf-8");
   const workUnit = content.match(/^work-unit:\s*(.+)$/m)?.[1]?.trim() ?? name.replace(/\.md$/, "");
   const title = content.match(/^title:\s*"(.+)"$/m)?.[1]?.trim() ?? "";

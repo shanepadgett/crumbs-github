@@ -42,23 +42,23 @@ Identify reusable Pencil components and map them to your project's UI library co
 
 ### Layout Mapping
 
-| Pencil | CSS |
-|--------|-----|
-| `layout: "vertical"` | `flex-direction: column` |
-| `layout: "horizontal"` | `flex-direction: row` |
-| `gap: N` | `gap: Npx` |
-| `padding: N` | `padding: Npx` |
-| `width: "fill_container"` | `width: 100%` or `flex: 1` |
-| `height: "fill_container"` | `height: 100%` or `flex: 1` |
-| `alignItems: "center/start/end"` | `align-items: center/start/end` |
+| Pencil                                       | CSS                                         |
+| -------------------------------------------- | ------------------------------------------- |
+| `layout: "vertical"`                         | `flex-direction: column`                    |
+| `layout: "horizontal"`                       | `flex-direction: row`                       |
+| `gap: N`                                     | `gap: Npx`                                  |
+| `padding: N`                                 | `padding: Npx`                              |
+| `width: "fill_container"`                    | `width: 100%` or `flex: 1`                  |
+| `height: "fill_container"`                   | `height: 100%` or `flex: 1`                 |
+| `alignItems: "center/start/end"`             | `align-items: center/start/end`             |
 | `justifyContent: "center/space-between/end"` | `justify-content: center/space-between/end` |
 
 ### Typography Mapping
 
-| Pencil | CSS |
-|--------|-----|
+| Pencil                                 | CSS                      |
+| -------------------------------------- | ------------------------ |
 | `fontSize: 12/14/16/18/20/24/30/36/48` | `font-size` in px or rem |
-| `fontWeight: "400/500/600/700"` | `font-weight` |
+| `fontWeight: "400/500/600/700"`        | `font-weight`            |
 
 ### Always Do
 
@@ -86,6 +86,7 @@ pencil_set_variables({ filePath: "...", variables: { ... } })
 ## Responsive Code
 
 Multi-artboard designs (375px mobile, 768px tablet, 1280px desktop):
+
 1. Read all artboards, compare structures
 2. Mobile-first code (base = smallest artboard)
 3. Add breakpoint overrides for larger layouts
@@ -95,30 +96,30 @@ See [responsive-breakpoints.md](responsive-breakpoints.md).
 
 ## Icon Mapping (Material -> Lucide)
 
-| Material | Lucide |
-|----------|--------|
-| `search` | `<Search />` |
-| `close` | `<X />` |
-| `menu` | `<Menu />` |
-| `arrow_forward/back` | `<ArrowRight />` / `<ArrowLeft />` |
-| `person` | `<User />` |
-| `settings` | `<Settings />` |
-| `home` | `<Home />` |
-| `notifications` | `<Bell />` |
-| `edit` | `<Pencil />` |
-| `delete` | `<Trash2 />` |
-| `add` | `<Plus />` |
-| `check` | `<Check />` |
-| `visibility/off` | `<Eye />` / `<EyeOff />` |
-| `chevron_right/down` | `<ChevronRight />` / `<ChevronDown />` |
-| `more_vert/horiz` | `<MoreVertical />` / `<MoreHorizontal />` |
-| `mail` | `<Mail />` |
-| `calendar_today` | `<Calendar />` |
-| `favorite` | `<Heart />` |
-| `star` | `<Star />` |
-| `download/upload` | `<Download />` / `<Upload />` |
-| `filter_list` | `<Filter />` |
-| `sort` | `<ArrowUpDown />` |
-| `logout` | `<LogOut />` |
+| Material             | Lucide                                    |
+| -------------------- | ----------------------------------------- |
+| `search`             | `<Search />`                              |
+| `close`              | `<X />`                                   |
+| `menu`               | `<Menu />`                                |
+| `arrow_forward/back` | `<ArrowRight />` / `<ArrowLeft />`        |
+| `person`             | `<User />`                                |
+| `settings`           | `<Settings />`                            |
+| `home`               | `<Home />`                                |
+| `notifications`      | `<Bell />`                                |
+| `edit`               | `<Pencil />`                              |
+| `delete`             | `<Trash2 />`                              |
+| `add`                | `<Plus />`                                |
+| `check`              | `<Check />`                               |
+| `visibility/off`     | `<Eye />` / `<EyeOff />`                  |
+| `chevron_right/down` | `<ChevronRight />` / `<ChevronDown />`    |
+| `more_vert/horiz`    | `<MoreVertical />` / `<MoreHorizontal />` |
+| `mail`               | `<Mail />`                                |
+| `calendar_today`     | `<Calendar />`                            |
+| `favorite`           | `<Heart />`                               |
+| `star`               | `<Star />`                                |
+| `download/upload`    | `<Download />` / `<Upload />`             |
+| `filter_list`        | `<Filter />`                              |
+| `sort`               | `<ArrowUpDown />`                         |
+| `logout`             | `<LogOut />`                              |
 
 All accept `className` for sizing: `<Search className="size-4" />`.

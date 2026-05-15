@@ -12,4 +12,3 @@ This file is a scratchpad for raw ideas and rambling thoughts.
 
 - extension to dynamically hide all other extensions, prompts, etc so agents stays focused on targeted extension folder we tell them to investigate
 - meed some kind of interactive web based plan that allows for commenting and feeding back to the agent.
-

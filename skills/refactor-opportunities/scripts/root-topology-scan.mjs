@@ -54,7 +54,11 @@ for (const entry of readdirSync(targetDir, { withFileTypes: true })) {
   }
   if (!entry.isFile()) continue;
   rootFiles.push(entry.name);
-  if (ROOT_SIGNALS.has(entry.name) || entry.name.endsWith(".xcodeproj") || entry.name.endsWith(".xcworkspace")) {
+  if (
+    ROOT_SIGNALS.has(entry.name) ||
+    entry.name.endsWith(".xcodeproj") ||
+    entry.name.endsWith(".xcworkspace")
+  ) {
     rootSignals.push(entry.name);
   }
 }

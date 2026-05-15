@@ -15,7 +15,9 @@ if (!findingsDir || !outputPath) {
 const SEVERITY_ORDER = { high: 0, medium: 1, low: 2 };
 
 function extractField(lines, label) {
-  const line = lines.find((value) => value.toLowerCase().startsWith(`- **${label.toLowerCase()}:**`));
+  const line = lines.find((value) =>
+    value.toLowerCase().startsWith(`- **${label.toLowerCase()}:**`),
+  );
   if (!line) return "";
   return line.replace(new RegExp(`^- \\*\\*${label}:\\*\\*\\s*`, "i"), "").trim();
 }
@@ -58,7 +60,9 @@ if (files.length === 0) {
   process.exit(1);
 }
 
-const sections = files.map((name) => parseFile(readFileSync(join(findingsDir, name), "utf-8"), name));
+const sections = files.map((name) =>
+  parseFile(readFileSync(join(findingsDir, name), "utf-8"), name),
+);
 const allFindings = sections.flatMap((section) => section.findings);
 const counts = { high: 0, medium: 0, low: 0 };
 
@@ -87,7 +91,9 @@ for (const section of sections) {
     continue;
   }
 
-  for (const finding of section.findings.sort((a, b) => SEVERITY_ORDER[a.severity] - SEVERITY_ORDER[b.severity] || a.id.localeCompare(b.id))) {
+  for (const finding of section.findings.sort(
+    (a, b) => SEVERITY_ORDER[a.severity] - SEVERITY_ORDER[b.severity] || a.id.localeCompare(b.id),
+  )) {
     lines.push(`### ${finding.id}`);
     lines.push(`- **Severity:** ${finding.severity}`);
     lines.push(`- **File:** ${finding.file}`);

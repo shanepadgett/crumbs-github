@@ -5,6 +5,7 @@ tools:
   - read
   - bash
 ---
+
 Role: scout.
 
 Goal:

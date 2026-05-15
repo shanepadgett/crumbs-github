@@ -66,14 +66,14 @@ The clean implementation is to keep task-04/task-05 storage and loop seams intac
    - `Planned implementation move:` Add overlay action wiring plus a pure send module that collects unsent records, builds one structured payload, emits it as a hidden steer message, and then marks those revisions as sent.
 
 8. **Requirement:** `When /qna-ledger sends updates, the system shall batch all unsent changed ordinary QnA items into one structured payload.`
-    - `Status:` `needs implementation`
-    - `Current files/functions/types that relate:` `extensions/qna/reconcile.ts` and `extensions/qna/runtime-submit.ts` bump `sendState.localRevision`; no batching helper exists.
-    - `Planned implementation move:` Introduce a dedicated batch payload type and builder that serializes every record with `localRevision > lastSentRevision` into one `ordinary_qna_ledger_updates` message.
+   - `Status:` `needs implementation`
+   - `Current files/functions/types that relate:` `extensions/qna/reconcile.ts` and `extensions/qna/runtime-submit.ts` bump `sendState.localRevision`; no batching helper exists.
+   - `Planned implementation move:` Introduce a dedicated batch payload type and builder that serializes every record with `localRevision > lastSentRevision` into one `ordinary_qna_ledger_updates` message.
 
 9. **Requirement:** `When /qna-ledger sends updates, the system shall send only items changed since the last send.`
-    - `Status:` `partially satisfied`
-    - `Current files/functions/types that relate:` `extensions/qna/types.ts:QnaLedgerSendState` tracks `localRevision` and `lastSentRevision`, but nothing consumes them.
-    - `Planned implementation move:` Centralize delta detection in a pure send helper, then update `lastSentRevision` and `lastSentAt` only for sent records after the batch message is successfully emitted.
+   - `Status:` `partially satisfied`
+   - `Current files/functions/types that relate:` `extensions/qna/types.ts:QnaLedgerSendState` tracks `localRevision` and `lastSentRevision`, but nothing consumes them.
+   - `Planned implementation move:` Centralize delta detection in a pure send helper, then update `lastSentRevision` and `lastSentAt` only for sent records after the batch message is successfully emitted.
 
 10. **Requirement:** `When /qna-ledger sends updates and any item is needs_clarification, the system shall reactivate the loop-scoped qna tool.`
 
@@ -88,14 +88,14 @@ The clean implementation is to keep task-04/task-05 storage and loop seams intac
 - `Planned implementation move:` Keep `tool.ts` and `runtime-submit.ts` open-only, have ledger-send loop metadata carry `source` plus `open` reviewable ids only, and use source-specific prompt copy to tell the agent that clarification follow-up may happen in chat while later authoritative edits return through `/qna-ledger`.
 
 1. **Requirement:** `The /qna-ledger overlay shall provide an export action.`
-    - `Status:` `needs implementation`
-    - `Current files/functions/types that relate:` no exporter or file-writing path exists in the QnA extension.
-    - `Planned implementation move:` Add overlay action wiring plus a Markdown export module that formats the full ordinary ledger and writes it to a timestamped file under repo-root `docs/qna/`.
+   - `Status:` `needs implementation`
+   - `Current files/functions/types that relate:` no exporter or file-writing path exists in the QnA extension.
+   - `Planned implementation move:` Add overlay action wiring plus a Markdown export module that formats the full ordinary ledger and writes it to a timestamped file under repo-root `docs/qna/`.
 
 2. **Requirement:** `When the user exports ordinary QnA state, the system shall write a timestamped Markdown snapshot under docs/qna/.`
-    - `Status:` `needs implementation`
-    - `Current files/functions/types that relate:` `extensions/question-runtime/request-paths.ts:resolveProjectRoot` already provides a reusable repo-root resolver; no QnA export writer exists.
-    - `Planned implementation move:` Reuse repo-root resolution, ensure `docs/qna/` exists, generate a sortable UTC timestamped filename, and write deterministic Markdown content for all ordinary ledger records.
+   - `Status:` `needs implementation`
+   - `Current files/functions/types that relate:` `extensions/question-runtime/request-paths.ts:resolveProjectRoot` already provides a reusable repo-root resolver; no QnA export writer exists.
+   - `Planned implementation move:` Reuse repo-root resolution, ensure `docs/qna/` exists, generate a sortable UTC timestamped filename, and write deterministic Markdown content for all ordinary ledger records.
 
 ## 4. Current Architecture Deep Dive
 
@@ -559,9 +559,7 @@ showQnaLedgerOverlay()
   ```ts
   export const QNA_LEDGER_SEND_CUSTOM_TYPE = "qna.ledger.send";
 
-  export function getPendingQnaLedgerSendItems(
-    state: QnaBranchStateSnapshot,
-  ): QnaLedgerSendItem[];
+  export function getPendingQnaLedgerSendItems(state: QnaBranchStateSnapshot): QnaLedgerSendItem[];
 
   export function buildQnaLedgerSendBatch(input: {
     state: QnaBranchStateSnapshot;

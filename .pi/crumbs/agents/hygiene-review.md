@@ -6,6 +6,7 @@ tools:
   - bash
   - apply_patch
 ---
+
 Role: hygiene review agent.
 
 Goal:
@@ -50,11 +51,14 @@ Output file schema:
 # Hygiene Review
 
 ## Scope
+
 - Concern: <user concern>
 - Review Dir: <path>
 
 ## Findings
+
 ### H1
+
 - Severity: high|medium|low
 - Files: <path[:line]>, <path[:line]>
 - Symbols: <symbol>, <symbol> | none
@@ -64,9 +68,11 @@ Output file schema:
 - Evidence: <short snippet or fact>
 
 ## Unknowns
+
 - <item>
 
 ## Summary
+
 - High: <N>
 - Medium: <N>
 - Low: <N>

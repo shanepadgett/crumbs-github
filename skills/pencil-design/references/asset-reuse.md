@@ -9,6 +9,7 @@ AI image gen is non-deterministic. Regenerating a logo produces different result
 ### 1. Search Existing
 
 Before generating any image:
+
 ```
 pencil_batch_get({
   filePath: "path/to/file.pen",
@@ -20,23 +21,25 @@ pencil_batch_get({
 ### 2. Copy Existing Asset
 
 ```javascript
-logoCopy=C("existingLogoNodeId", "targetParentId", { width: 120, height: 40 })
+logoCopy = C("existingLogoNodeId", "targetParentId", { width: 120, height: 40 });
 ```
 
 For components containing logos (header with built-in logo), insert as ref:
+
 ```javascript
-header=I("screenId", { type: "ref", ref: "HeaderComponent", width: "fill_container" })
+header = I("screenId", { type: "ref", ref: "HeaderComponent", width: "fill_container" });
 ```
 
 ### 3. Adjust Size
 
 ```javascript
-U("copiedLogoId", { width: 100, height: 32 })
+U("copiedLogoId", { width: 100, height: 32 });
 ```
 
 ## When to Generate New
 
 Only when:
+
 1. No similar asset exists anywhere in document
 2. Image is genuinely unique to this screen
 3. Building first screen, no assets exist yet

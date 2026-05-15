@@ -185,7 +185,11 @@ The clean architecture is to keep task-04’s branch-local ledger pipeline intac
 
   ```ts
   type QuestionRuntimeStructuredSubmitResult =
-    | { kind: "question_outcomes"; requiresClarification: boolean; outcomes: SubmittedQuestionRuntimeQuestionOutcome[] }
+    | {
+        kind: "question_outcomes";
+        requiresClarification: boolean;
+        outcomes: SubmittedQuestionRuntimeQuestionOutcome[];
+      }
     | { kind: "no_user_response"; requiresClarification: false; outcomes: [] };
   ```
 
@@ -514,9 +518,7 @@ agent_end --> settled? --> restore tool scope --> future backlog stays in qna.st
   ```ts
   export const INTERVIEW_CHAT_ATTACHMENT_ENTRY = "interview.chat_attachment";
 
-  export function getAttachedInterviewSessionIdFromBranch(
-    branch: SessionEntry[],
-  ): string | null;
+  export function getAttachedInterviewSessionIdFromBranch(branch: SessionEntry[]): string | null;
   ```
 
 - `Key logic to add or change:`

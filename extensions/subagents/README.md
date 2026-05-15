@@ -38,7 +38,10 @@ Good for:
 Use `web-research` when direct search or one fetch is not enough.
 
 ```json
-{ "agent": "web-research", "task": "Compare current Vite SSR deployment options. Return bullets with source URLs." }
+{
+  "agent": "web-research",
+  "task": "Compare current Vite SSR deployment options. Return bullets with source URLs."
+}
 ```
 
 Good for:
@@ -133,6 +136,7 @@ tools:
   - read
   - bash
 ---
+
 You review code changes for correctness, risk, and missing tests.
 Prefer concrete file paths, exact findings, and small safe recommendations.
 ```

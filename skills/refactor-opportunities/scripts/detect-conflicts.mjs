@@ -16,14 +16,61 @@ const { issues } = JSON.parse(readFileSync(inputPath, "utf-8"));
 // signal for conflict detection.  Kept short and domain-targeted so we don't
 // need a full NLP stopword list.
 const STOPWORDS = new Set([
-  "file", "files", "type", "types", "code", "used", "uses", "using",
-  "that", "this", "with", "from", "into", "only", "also", "same",
-  "line", "name", "each", "make", "added", "adds", "does", "have",
-  "been", "more", "than", "when", "will", "would", "could", "should",
-  "method", "function", "class", "struct", "protocol", "enum",
-  "property", "parameter", "variable", "value", "string", "error",
-  "single", "existing", "current", "without", "defined", "found",
-  "pattern", "implementation", "conformer", "because", "already",
+  "file",
+  "files",
+  "type",
+  "types",
+  "code",
+  "used",
+  "uses",
+  "using",
+  "that",
+  "this",
+  "with",
+  "from",
+  "into",
+  "only",
+  "also",
+  "same",
+  "line",
+  "name",
+  "each",
+  "make",
+  "added",
+  "adds",
+  "does",
+  "have",
+  "been",
+  "more",
+  "than",
+  "when",
+  "will",
+  "would",
+  "could",
+  "should",
+  "method",
+  "function",
+  "class",
+  "struct",
+  "protocol",
+  "enum",
+  "property",
+  "parameter",
+  "variable",
+  "value",
+  "string",
+  "error",
+  "single",
+  "existing",
+  "current",
+  "without",
+  "defined",
+  "found",
+  "pattern",
+  "implementation",
+  "conformer",
+  "because",
+  "already",
 ]);
 
 function tokenize(text) {
@@ -31,7 +78,7 @@ function tokenize(text) {
     String(text)
       .toLowerCase()
       .split(/[^a-z0-9]+/)
-      .filter((value) => value.length > 3 && !STOPWORDS.has(value))
+      .filter((value) => value.length > 3 && !STOPWORDS.has(value)),
   );
 }
 
@@ -52,7 +99,9 @@ function oppositeDirection(a, b) {
     ["delete", "introduce"],
     ["collapse", "split"],
   ];
-  return oppositePairs.some(([x, y]) => (left.includes(x) && right.includes(y)) || (left.includes(y) && right.includes(x)));
+  return oppositePairs.some(
+    ([x, y]) => (left.includes(x) && right.includes(y)) || (left.includes(y) && right.includes(x)),
+  );
 }
 
 const candidates = [];

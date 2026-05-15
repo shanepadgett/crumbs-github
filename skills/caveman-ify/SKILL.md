@@ -1,6 +1,6 @@
 ---
 name: caveman-ify
-description: "Compress any skill to minimal tokens — rewrites SKILL.md, all references/, and scripts/ comments. Strips verbose prose, filler, redundancy while preserving technical accuracy and functionality. Use when user says \"caveman-ify this skill\", \"compress skill\", \"shrink skill\", or invokes /caveman-ify."
+description: Compress any skill to minimal tokens — rewrites SKILL.md, all references/, and scripts/ comments. Strips verbose prose, filler, redundancy while preserving technical accuracy and functionality. Use when user says "caveman-ify this skill", "compress skill", "shrink skill", or invokes /caveman-ify.'
 ---
 
 # Caveman-ify

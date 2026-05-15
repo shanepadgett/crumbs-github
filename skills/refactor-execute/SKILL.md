@@ -113,11 +113,11 @@ Report:
 
 ## Ownership
 
-| Step | Owner |
-|---|---|
-| execution plan, batch ordering | script |
-| work unit execution | subagents (one per unit) |
-| result collection, merge, summary | orchestrator |
+| Step                              | Owner                    |
+| --------------------------------- | ------------------------ |
+| execution plan, batch ordering    | script                   |
+| work unit execution               | subagents (one per unit) |
+| result collection, merge, summary | orchestrator             |
 
 ## Guardrails
 

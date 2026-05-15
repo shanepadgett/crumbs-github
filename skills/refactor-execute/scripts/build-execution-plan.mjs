@@ -7,11 +7,18 @@ const indexPath = process.argv[2];
 const outputPath = process.argv[3];
 const unitsFlag = process.argv.find((a) => a.startsWith("--units="));
 const requestedUnits = unitsFlag
-  ? new Set(unitsFlag.slice(8).split(",").map((u) => u.trim()))
+  ? new Set(
+      unitsFlag
+        .slice(8)
+        .split(",")
+        .map((u) => u.trim()),
+    )
   : null;
 
 if (!indexPath || !outputPath) {
-  console.error("Usage: node build-execution-plan.mjs <index.json> <output-path> [--units=WU-001,WU-003]");
+  console.error(
+    "Usage: node build-execution-plan.mjs <index.json> <output-path> [--units=WU-001,WU-003]",
+  );
   process.exit(1);
 }
 
@@ -27,10 +34,16 @@ for (const entry of workUnits) {
   const filesMatch = content.match(/^files:\s*\[([^\]]*)\]/m);
 
   const deps = depsMatch?.[1]
-    ? depsMatch[1].split(",").map((d) => d.trim()).filter(Boolean)
+    ? depsMatch[1]
+        .split(",")
+        .map((d) => d.trim())
+        .filter(Boolean)
     : [];
   const files = filesMatch?.[1]
-    ? filesMatch[1].split(",").map((f) => f.trim()).filter(Boolean)
+    ? filesMatch[1]
+        .split(",")
+        .map((f) => f.trim())
+        .filter(Boolean)
     : [];
 
   units.set(entry.workUnit, {
@@ -110,4 +123,6 @@ while (remaining.size > 0) {
 
 const plan = { batches, skipped };
 writeFileSync(outputPath, `${JSON.stringify(plan, null, 2)}\n`, "utf-8");
-console.log(`Execution plan: ${batches.length} batch(es), ${active.length} unit(s), ${skipped.length} skipped`);
+console.log(
+  `Execution plan: ${batches.length} batch(es), ${active.length} unit(s), ${skipped.length} skipped`,
+);

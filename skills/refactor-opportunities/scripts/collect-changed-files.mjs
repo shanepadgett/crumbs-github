@@ -122,7 +122,10 @@ const unstagedRaw = git(["diff", "--name-status", "--diff-filter=ACMR"]);
 
 const changedByPath = new Map();
 
-for (const [source, raw] of [["staged", stagedRaw], ["unstaged", unstagedRaw]]) {
+for (const [source, raw] of [
+  ["staged", stagedRaw],
+  ["unstaged", unstagedRaw],
+]) {
   for (const line of raw.split("\n")) {
     const parsed = parseNameStatusLine(line);
     if (!parsed?.path) continue;
@@ -177,7 +180,12 @@ for (const entry of [...changedByPath.values()].sort((a, b) => a.path.localeComp
 
   const reason = classifyExcluded(entry.path);
   if (reason) {
-    excludedFiles.push({ path: entry.path, reason, status: entry.status, renamedFrom: entry.renamedFrom });
+    excludedFiles.push({
+      path: entry.path,
+      reason,
+      status: entry.status,
+      renamedFrom: entry.renamedFrom,
+    });
     continue;
   }
   changedFiles.push(entry);

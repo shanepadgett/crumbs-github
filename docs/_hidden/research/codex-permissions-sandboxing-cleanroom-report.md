@@ -286,4 +286,4 @@ If the next chat is for actual design, these are the decisions that need to be m
    Which Pi-specific directories must be treated like Codex treats `.codex` and `.git` under writable roots?
 
 10. Compatibility level
-   Is the objective behavior parity, UX parity, or protocol parity with upstream Codex?
+    Is the objective behavior parity, UX parity, or protocol parity with upstream Codex?

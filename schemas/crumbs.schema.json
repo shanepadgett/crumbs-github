@@ -375,22 +375,13 @@
             {
               "name": "swift",
               "task": "check:swift",
-              "trackedExtensions": [
-                ".swift"
-              ],
-              "excludeGlobs": [
-                "external/**"
-              ]
+              "trackedExtensions": [".swift"],
+              "excludeGlobs": ["external/**"]
             },
             {
               "name": "web",
               "task": "check:web",
-              "trackedExtensions": [
-                ".ts",
-                ".tsx",
-                ".js",
-                ".jsx"
-              ]
+              "trackedExtensions": [".ts", ".tsx", ".js", ".jsx"]
             }
           ]
         }

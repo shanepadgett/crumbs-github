@@ -10,13 +10,16 @@ if (!outputPath) {
   process.exit(1);
 }
 
-const timestamp = new Date().toISOString().replace("T", " ").replace(/\.\d+Z$/, " UTC");
+const timestamp = new Date()
+  .toISOString()
+  .replace("T", " ")
+  .replace(/\.\d+Z$/, " UTC");
 
 mkdirSync(dirname(outputPath), { recursive: true });
 writeFileSync(
   outputPath,
   `# Refactor Opportunities — Remediation Plan\n\nGenerated: ${timestamp}\n\n## Work Units\n`,
-  "utf-8"
+  "utf-8",
 );
 
 console.log(`Scaffolded remediation plan: ${outputPath}`);

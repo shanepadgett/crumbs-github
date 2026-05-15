@@ -671,13 +671,14 @@ form-state.ts
     state: QuestionRuntimeFormState,
   ): QuestionRuntimeStructuredSubmitResult;
 
-  export function buildQuestionRuntimeFormResult(input:
-    | { action: "cancel"; state: QuestionRuntimeFormState }
-    | {
-        action: "submit";
-        state: QuestionRuntimeFormState;
-        submitResult: QuestionRuntimeStructuredSubmitResult;
-      }
+  export function buildQuestionRuntimeFormResult(
+    input:
+      | { action: "cancel"; state: QuestionRuntimeFormState }
+      | {
+          action: "submit";
+          state: QuestionRuntimeFormState;
+          submitResult: QuestionRuntimeStructuredSubmitResult;
+        },
   ): QuestionRuntimeFormResult;
   ```
 

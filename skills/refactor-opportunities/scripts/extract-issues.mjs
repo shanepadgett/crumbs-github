@@ -11,7 +11,9 @@ if (!outputPath || reportPaths.length === 0) {
 }
 
 function extractField(lines, label) {
-  const line = lines.find((value) => value.toLowerCase().startsWith(`- **${label.toLowerCase()}:**`));
+  const line = lines.find((value) =>
+    value.toLowerCase().startsWith(`- **${label.toLowerCase()}:**`),
+  );
   if (!line) return "";
   return line.replace(new RegExp(`^- \\*\\*${label}:\\*\\*\\s*`, "i"), "").trim();
 }
@@ -20,7 +22,11 @@ const issues = [];
 
 for (const reportPath of reportPaths) {
   const content = readFileSync(reportPath, "utf-8");
-  const lens = content.match(/^# (.+?) — Compiled Findings$/m)?.[1]?.trim().toLowerCase() ?? "unknown";
+  const lens =
+    content
+      .match(/^# (.+?) — Compiled Findings$/m)?.[1]
+      ?.trim()
+      .toLowerCase() ?? "unknown";
   const sections = content.split(/^## /m).slice(1);
 
   for (const sectionBlock of sections) {

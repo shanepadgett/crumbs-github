@@ -16,14 +16,14 @@ pencil_get_variables({ filePath: "path/to/file.pen" })
 
 ### 2. Map Values to Variables
 
-| Want | Don't use | Use instead |
-|------|-----------|-------------|
-| Blue brand color | `fill: "#3b82f6"` | `primary` variable |
-| White text on primary | `textColor: "#ffffff"` | `primary-foreground` variable |
-| Border color | `strokeColor: "#e2e8f0"` | `border` variable |
-| Medium rounding | `cornerRadius: [6,6,6,6]` | `radius-md` variable |
-| Page background | `fill: "#ffffff"` | `background` variable |
-| Body text color | `textColor: "#0a0a0a"` | `foreground` variable |
+| Want                  | Don't use                 | Use instead                   |
+| --------------------- | ------------------------- | ----------------------------- |
+| Blue brand color      | `fill: "#3b82f6"`         | `primary` variable            |
+| White text on primary | `textColor: "#ffffff"`    | `primary-foreground` variable |
+| Border color          | `strokeColor: "#e2e8f0"`  | `border` variable             |
+| Medium rounding       | `cornerRadius: [6,6,6,6]` | `radius-md` variable          |
+| Page background       | `fill: "#ffffff"`         | `background` variable         |
+| Body text color       | `textColor: "#0a0a0a"`    | `foreground` variable         |
 
 ### 3. Apply Variables
 
@@ -44,15 +44,15 @@ Variables can differ per theme (light/dark). Hardcoded values break theme switch
 
 ## Common Variable Categories
 
-| Category | Names |
-|----------|-------|
-| Brand colors | `primary`, `secondary`, `accent` |
-| Semantic colors | `destructive`, `success`, `warning`, `info` |
-| Surface colors | `background`, `foreground`, `card`, `card-foreground` |
-| UI colors | `border`, `ring`, `muted`, `muted-foreground` |
-| Border radius | `radius-sm/md/lg/xl` |
-| Typography | `font-sans`, `font-mono`, `font-heading` |
-| Spacing | `spacing-xs/sm/md/lg` |
+| Category        | Names                                                 |
+| --------------- | ----------------------------------------------------- |
+| Brand colors    | `primary`, `secondary`, `accent`                      |
+| Semantic colors | `destructive`, `success`, `warning`, `info`           |
+| Surface colors  | `background`, `foreground`, `card`, `card-foreground` |
+| UI colors       | `border`, `ring`, `muted`, `muted-foreground`         |
+| Border radius   | `radius-sm/md/lg/xl`                                  |
+| Typography      | `font-sans`, `font-mono`, `font-heading`              |
+| Spacing         | `spacing-xs/sm/md/lg`                                 |
 
 ## See Also
 

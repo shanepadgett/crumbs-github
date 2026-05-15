@@ -299,7 +299,7 @@ Why this is better:
 The agent tries:
 
 ```ts
-webfetch("https://docs.rs/serde")
+webfetch("https://docs.rs/serde");
 ```
 
 `docs.rs` is not in the current allowlist.

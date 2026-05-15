@@ -12,6 +12,7 @@ One file per section reviewer. No prose between findings. If none, write `None.`
 ## Findings
 
 ### <lens>-<section-slug>-<NNN>
+
 - **Severity:** high | medium | low
 - **File:** <path>:<line>
 - **Symbol:** <type/function/property name or `none`>
@@ -21,6 +22,7 @@ One file per section reviewer. No prose between findings. If none, write `None.`
 - **Suggested Direction:** <one line>
 
 ## Summary
+
 - High: <N>
 - Medium: <N>
 - Low: <N>
@@ -34,6 +36,7 @@ One file per section reviewer. No prose between findings. If none, write `None.`
 ## Findings
 
 ### <canonical-id>
+
 - **Disposition:** merge | keep-separate | defer
 - **Primary Lens:** hygiene | over-engineering | runtime | mixed
 - **Source Findings:** <id1>, <id2>
@@ -48,6 +51,7 @@ One file per section reviewer. No prose between findings. If none, write `None.`
 - **Churn Refs:** <history-id1>, <history-id2> | none
 
 ## Summary
+
 - Merged: <N>
 - Kept Separate: <N>
 - Deferred: <N>
@@ -63,12 +67,14 @@ One file per section reviewer. No prose between findings. If none, write `None.`
 ## Findings
 
 ### <canonical-id>
+
 - **Churn Risk:** none | weak | strong
 - **History Refs:** <history-id1>, <history-id2> | none
 - **Reason:** <one line>
 - **Recommended Handling:** ignore | note-only | escalate
 
 ## Summary
+
 - None: <N>
 - Weak: <N>
 - Strong: <N>
@@ -84,6 +90,7 @@ Generated: <timestamp>
 ## Work Units
 
 ### WU-001
+
 - **Title:** <short title>
 - **Priority:** high | medium | low
 - **Depends On:** <WU-000> | none
@@ -96,9 +103,11 @@ Generated: <timestamp>
 - **Why Not Conflicting:** <one line>
 
 #### Steps
+
 1. ...
 
 #### Validation
+
 - ...
 ```
 
@@ -123,9 +132,7 @@ Generated: <timestamp>
       "renamedFrom": null
     }
   ],
-  "reviewedChangedFiles": [
-    "src/feature/foo.ts"
-  ],
+  "reviewedChangedFiles": ["src/feature/foo.ts"],
   "excludedFiles": [
     {
       "path": "package-lock.json",
@@ -133,12 +140,8 @@ Generated: <timestamp>
     }
   ],
   "contextRule": "unchanged files are support evidence only",
-  "detected": [
-    { "stack": "swift-swiftui", "files": 120 }
-  ],
-  "activeOverlays": [
-    "references/languages/swift-swiftui.md"
-  ],
+  "detected": [{ "stack": "swift-swiftui", "files": 120 }],
+  "activeOverlays": ["references/languages/swift-swiftui.md"],
   "lenses": {
     "hygiene": ["1-naming", "2-indirection"],
     "over-engineering": ["1-one-use-abstractions"],
