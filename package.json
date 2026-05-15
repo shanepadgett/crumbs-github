@@ -14,6 +14,7 @@
     "extensions/mcp",
     "extensions/notify",
     "extensions/quiet-validators",
+    "extensions/repo-scaffold",
     "extensions/skills-manager",
     "extensions/status-table",
     "extensions/subagents",
@@ -28,25 +29,20 @@
     "@modelcontextprotocol/sdk": "1.29.0",
     "node-pty": "1.1.0"
   },
+  "devDependencies": {
+    "@earendil-works/pi-ai": "0.74.0",
+    "@earendil-works/pi-coding-agent": "0.74.0",
+    "@earendil-works/pi-tui": "0.74.0",
+    "@types/node": "25.5.2",
+    "typebox": "1.1.38",
+    "typescript": "6.0.3"
+  },
   "peerDependencies": {
     "@earendil-works/pi-ai": ">=0.74.0 <0.75.0",
     "@earendil-works/pi-coding-agent": ">=0.74.0 <0.75.0",
     "@earendil-works/pi-tui": ">=0.74.0 <0.75.0",
     "typebox": ">=1.1.38 <2.0.0"
   },
-  "devDependencies": {
-    "@earendil-works/pi-ai": "0.74.0",
-    "@earendil-works/pi-coding-agent": "0.74.0",
-    "@earendil-works/pi-tui": "0.74.0",
-    "typebox": "1.1.38",
-    "@types/node": "25.5.2",
-    "oxfmt": "0.44.0",
-    "oxlint": "1.59.0",
-    "typescript": "6.0.2"
-  },
-  "trustedDependencies": [
-    "node-pty"
-  ],
   "pi": {
     "extensions": [
       "./extensions"
@@ -54,5 +50,8 @@
     "skills": [
       "./skills"
     ]
-  }
+  },
+  "trustedDependencies": [
+    "node-pty"
+  ]
 }
