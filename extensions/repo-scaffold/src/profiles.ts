@@ -290,9 +290,7 @@ run_filtered "format markdown" "format markdown failed" mdformat "\${MDFORMAT_AR
       {
         path: ".mise/tasks/lint/markdown",
         executable: true,
-        content: task(
-          'run_filtered "lint markdown" "lint markdown failed" markdownlint-cli2 "**/*.md" "#node_modules"',
-        ),
+        content: task('run_filtered "lint markdown" "lint markdown failed" markdownlint-cli2'),
       },
       {
         path: ".mise/tasks/check/markdown",
@@ -320,10 +318,11 @@ run_filtered "format markdown" "format markdown failed" mdformat "\${MDFORMAT_AR
       {
         id: "yamllint",
         label: "yamllint",
+        miseKey: "pipx:yamllint",
         source: { kind: "pypi", packageName: "yamllint", requiresPython: true },
       },
     ],
-    files: (versions) => [
+    files: () => [
       { path: ".mise/tasks/lib/scaffold.sh", content: taskLib, executable: true },
       {
         path: ".yamllint",
@@ -333,9 +332,7 @@ run_filtered "format markdown" "format markdown failed" mdformat "\${MDFORMAT_AR
       {
         path: ".mise/tasks/lint/yaml",
         executable: true,
-        content: task(
-          `run_filtered "lint yaml" "lint yaml failed" uvx yamllint==${versions.yamllint} .`,
-        ),
+        content: task('run_filtered "lint yaml" "lint yaml failed" yamllint .'),
       },
       {
         path: ".mise/tasks/check/yaml",

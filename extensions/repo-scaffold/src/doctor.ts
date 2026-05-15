@@ -15,7 +15,7 @@ function expectedTools(scope: Scope): string[] {
   if (scope === "ts")
     return ["bun|node", "npm:oxlint|npm:@biomejs/biome", "npm:oxfmt|npm:@biomejs/biome"];
   if (scope === "markdown") return ["npm:markdownlint-cli2", "python", "uv"];
-  if (scope === "yaml") return ["python", "uv"];
+  if (scope === "yaml") return ["python", "uv", "pipx:yamllint"];
   if (scope === "go") return ["go", "golangci-lint"];
   if (scope === "swift") return ["swiftformat", "swiftlint"];
   return [];
