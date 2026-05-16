@@ -17,9 +17,11 @@ Install these tools first:
 - [Pi coding agent](https://github.com/badlogic/pi-mono/tree/main/packages/coding-agent) installed on your system so the `pi` command is available
 
 ```bash
-bun install -g @mariozechner/pi-coding-agent
+curl -fsSL https://pi.dev/install.sh | sh
 // OR
-npm install -g @mariozechner/pi-coding-agent
+bun install -g @earendil-works/pi-coding-agent
+// OR
+npm install -g @earendil-works/pi-coding-agent
 ```
 
 - [mise](https://mise.jdx.dev/) installed on your system
