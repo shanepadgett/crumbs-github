@@ -53,7 +53,7 @@ export function parseGitStatus(stdout: string): GitSummary {
 export async function loadGitSummary(pi: ExtensionAPI, cwd: string): Promise<GitSummary> {
   const result = await pi.exec(
     "git",
-    ["status", "--porcelain=v1", "--branch", "--untracked-files=all"],
+    ["--no-optional-locks", "status", "--porcelain=v1", "--branch", "--untracked-files=all"],
     { cwd, timeout: GIT_TIMEOUT_MS },
   );
 

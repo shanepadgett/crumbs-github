@@ -202,6 +202,7 @@ async function openStatusTableConfig(
 
 export default function statusTableExtension(pi: ExtensionAPI): void {
   let lastContext: ExtensionContext | undefined;
+  let lastCwd: string | undefined;
   let gitRefreshTimer: ReturnType<typeof setInterval> | undefined;
   const stateByCwd = new Map<string, WorkspaceState>();
 
@@ -220,7 +221,20 @@ export default function statusTableExtension(pi: ExtensionAPI): void {
   }
 
   function setCurrentContext(ctx: ExtensionContext): void {
-    lastContext = ctx;
+    try {
+      lastCwd = ctx.cwd;
+      lastContext = ctx;
+    } catch {
+      lastContext = undefined;
+      lastCwd = undefined;
+    }
+  }
+
+  function clearCurrentContext(ctx?: ExtensionContext): void {
+    if (!ctx || lastContext === ctx) {
+      lastContext = undefined;
+      lastCwd = undefined;
+    }
   }
 
   async function ensurePrefs(cwd: string): Promise<StatusTablePrefs> {
@@ -254,7 +268,10 @@ export default function statusTableExtension(pi: ExtensionAPI): void {
     if (!ctx.hasUI) return;
 
     setCurrentContext(ctx);
-    const state = getWorkspaceState(ctx.cwd);
+    const cwd = lastCwd;
+    if (!cwd) return;
+
+    const state = getWorkspaceState(cwd);
     const prefs = state.prefs ?? DEFAULT_PREFS;
 
     if (!prefs.enabled) {
@@ -264,20 +281,13 @@ export default function statusTableExtension(pi: ExtensionAPI): void {
 
     hideFooter(ctx);
 
+    const snapshot = buildSnapshot(pi, ctx, state.git, state.tokenTotals, state.flags);
+
     ctx.ui.setWidget(
       WIDGET_KEY,
       (_tui, theme) => ({
         invalidate() {},
         render(width: number): string[] {
-          const currentState = getWorkspaceState(ctx.cwd);
-          const snapshot = buildSnapshot(
-            pi,
-            ctx,
-            currentState.git,
-            currentState.tokenTotals,
-            currentState.flags,
-          );
-
           return renderMinimalTable(theme, width, snapshot, prefs.visibleBlocks);
         },
       }),
@@ -286,19 +296,22 @@ export default function statusTableExtension(pi: ExtensionAPI): void {
   }
 
   function refreshUI(ctx: ExtensionContext): void {
-    renderSnapshot(ctx);
+    try {
+      renderSnapshot(ctx);
+    } catch {
+      clearCurrentContext(ctx);
+    }
   }
 
-  async function refreshGit(ctx: ExtensionContext): Promise<void> {
-    setCurrentContext(ctx);
-    const state = getWorkspaceState(ctx.cwd);
+  async function refreshGit(cwd: string, renderAfter: boolean): Promise<void> {
+    const state = getWorkspaceState(cwd);
     const nonce = ++state.gitRefreshNonce;
-    const git = await loadGitSummary(pi, ctx.cwd);
+    const git = await loadGitSummary(pi, cwd);
     if (nonce !== state.gitRefreshNonce) return;
 
     state.git = git;
-    if (lastContext?.cwd !== ctx.cwd) return;
-    renderSnapshot(lastContext);
+    if (!renderAfter || lastCwd !== cwd || !lastContext) return;
+    refreshUI(lastContext);
   }
 
   function scheduleUIRefresh(ctx: ExtensionContext): void {
@@ -308,15 +321,17 @@ export default function statusTableExtension(pi: ExtensionAPI): void {
 
   function scheduleGitRefresh(ctx: ExtensionContext): void {
     setCurrentContext(ctx);
-    void refreshGit(ctx);
+    const cwd = lastCwd;
+    if (!cwd) return;
+    void refreshGit(cwd, true).catch(() => {});
   }
 
   function startGitPolling(ctx: ExtensionContext): void {
     if (gitRefreshTimer) return;
 
     gitRefreshTimer = setInterval(() => {
-      if (!lastContext) return;
-      void refreshGit(lastContext);
+      if (!lastCwd) return;
+      void refreshGit(lastCwd, false).catch(() => {});
     }, GIT_REFRESH_INTERVAL_MS);
     gitRefreshTimer.unref?.();
 
@@ -331,19 +346,25 @@ export default function statusTableExtension(pi: ExtensionAPI): void {
 
   function applyFlagEvent(
     ctx: ExtensionContext | undefined,
+    cwd: string | undefined,
     event: StatusFlagEvent,
     key: "fastEnabled" | "cavemanEnabled",
   ): void {
-    if (!ctx) return;
-    if (event.cwd && event.cwd !== ctx.cwd) return;
+    const targetCwd = event.cwd ?? cwd;
+    if (!targetCwd) return;
+    if (cwd && event.cwd && event.cwd !== cwd) return;
     if (typeof event.enabled !== "boolean") return;
 
-    getWorkspaceState(ctx.cwd).flags[key] = event.enabled;
-    refreshUI(ctx);
+    getWorkspaceState(targetCwd).flags[key] = event.enabled;
+    if (ctx && cwd === targetCwd) refreshUI(ctx);
   }
 
-  function applyCavemanEvent(ctx: ExtensionContext | undefined, event: CavemanFlagEvent): void {
-    const targetCwd = event.cwd ?? ctx?.cwd;
+  function applyCavemanEvent(
+    ctx: ExtensionContext | undefined,
+    cwd: string | undefined,
+    event: CavemanFlagEvent,
+  ): void {
+    const targetCwd = event.cwd ?? cwd;
     if (!targetCwd) return;
 
     const flags = getWorkspaceState(targetCwd).flags;
@@ -354,7 +375,7 @@ export default function statusTableExtension(pi: ExtensionAPI): void {
     if (typeof event.hasSessionOverride === "boolean") {
       flags.cavemanHasSessionOverride = event.hasSessionOverride;
     }
-    if (ctx && ctx.cwd === targetCwd) refreshUI(ctx);
+    if (ctx && cwd === targetCwd) refreshUI(ctx);
   }
 
   async function hydrateContext(ctx: ExtensionContext): Promise<void> {
@@ -365,17 +386,17 @@ export default function statusTableExtension(pi: ExtensionAPI): void {
   }
 
   pi.events.on(CRUMBS_EVENT_FAST_CHANGED, (event) => {
-    applyFlagEvent(lastContext, asStatusFlagEvent(event), "fastEnabled");
+    applyFlagEvent(lastContext, lastCwd, asStatusFlagEvent(event), "fastEnabled");
   });
 
   pi.events.on(CRUMBS_EVENT_CAVEMAN_CHANGED, (event) => {
-    applyCavemanEvent(lastContext, asCavemanFlagEvent(event));
+    applyCavemanEvent(lastContext, lastCwd, asCavemanFlagEvent(event));
   });
 
   pi.events.on(CRUMBS_EVENT_THINKING_CHANGED, (event) => {
     const cwdEvent = asCwdEvent(event);
-    if (!lastContext) return;
-    if (cwdEvent.cwd && cwdEvent.cwd !== lastContext.cwd) return;
+    if (!lastContext || !lastCwd) return;
+    if (cwdEvent.cwd && cwdEvent.cwd !== lastCwd) return;
     refreshUI(lastContext);
   });
 
@@ -468,7 +489,7 @@ export default function statusTableExtension(pi: ExtensionAPI): void {
 
   pi.on("session_shutdown", async (_event, ctx) => {
     stopGitPolling();
-    lastContext = undefined;
+    clearCurrentContext();
     clearStatusTable(ctx);
   });
 }
